@@ -79,7 +79,7 @@ export default function Metronome({ initialBpm }: { initialBpm?: number }) {
   const swing = beat < 0 ? 0 : count % 2 === 0 ? -24 : 24;
 
   return (
-    <div className="grid items-center gap-8 lg:grid-cols-[1fr_1fr]">
+    <div className="grid items-center gap-8 lg:grid-cols-[1fr_1fr] short:grid-cols-[1fr_1.4fr] short:gap-4">
       <div className="flex flex-col items-center">
         {/* Sarkaç */}
         <div className="relative h-56 w-56">

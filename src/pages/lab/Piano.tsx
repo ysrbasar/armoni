@@ -86,7 +86,7 @@ export default function Piano() {
 
   return (
     <div>
-      <div className="mb-5 flex flex-wrap items-center gap-3">
+      <div className="mb-5 flex flex-wrap items-center gap-3 short:mb-2 short:gap-2">
         <Tabs size="sm" value={timbre} onChange={setTimbre} tabs={[{ id: "piano", label: "Piyano" }, { id: "soft", label: "Yumuşak" }, { id: "organ", label: "Org" }]} />
         <Tabs size="sm" value={labels} onChange={setLabels} tabs={[{ id: "solfege", label: "Do Re Mi" }, { id: "letters", label: "C D E" }, { id: "keys", label: "Klavye", icon: Keyboard }]} />
         <div className="ml-auto flex items-center gap-1 rounded-xl bg-canvas-2/80 p-1">
@@ -114,7 +114,7 @@ export default function Piano() {
           </div>
         </div>
         <div className="no-scrollbar overflow-x-auto">
-          <div className="relative h-48 min-w-[640px] touch-none select-none sm:h-56" onContextMenu={(e) => e.preventDefault()}>
+          <div className="relative h-48 min-w-[640px] touch-none select-none sm:h-56 short:h-[max(130px,calc(100dvh-250px))]" onContextMenu={(e) => e.preventDefault()}>
             {whites.map((midi, i) => (
               <button
                 key={midi}
@@ -149,7 +149,7 @@ export default function Piano() {
           </div>
         </div>
       </div>
-      <p className="mt-4 text-center text-xs text-muted">
+      <p className="mt-4 text-center text-xs text-muted short:hidden">
         Klavyeden çalmak için alt sıra <kbd className="rounded bg-canvas-2 px-1.5 py-0.5 font-sans font-semibold">Z S X D C…</kbd> ve üst sıra{" "}
         <kbd className="rounded bg-canvas-2 px-1.5 py-0.5 font-sans font-semibold">Q 2 W 3 E…</kbd> tuşlarını kullanın. Oktav değiştirmek için ← →.
       </p>

@@ -26,7 +26,7 @@ export default function MusicLab({ initial }: { initial?: string }) {
   const [mute, setMute] = useState(false);
 
   const volumeControl = (
-    <div className="flex items-center gap-3 rounded-2xl border border-line bg-surface px-3 py-2">
+    <div className="flex h-full items-center gap-3 rounded-2xl border border-line bg-surface px-3 py-2 short:gap-2 short:rounded-xl short:py-1">
       <button
         onClick={() => {
           setMute(!mute);
@@ -44,7 +44,7 @@ export default function MusicLab({ initial }: { initial?: string }) {
         max={100}
         value={vol}
         aria-label="Ses düzeyi"
-        className="range w-28"
+        className="range w-28 short:w-20"
         style={{ ["--fill" as string]: `${vol}%` }}
         onChange={(e) => {
           const v = Number(e.target.value);
@@ -63,10 +63,14 @@ export default function MusicLab({ initial }: { initial?: string }) {
   return (
     <>
       {role === "teacher" ? (
-        <PageHeader title="Müzik Laboratuvarı" subtitle="Derste ve evde kullanılabilen etkileşimli araçlar" actions={volumeControl} />
+        <>
+          <div className="short:hidden">
+            <PageHeader title="Müzik Laboratuvarı" subtitle="Derste ve evde kullanılabilen etkileşimli araçlar" actions={volumeControl} />
+          </div>
+        </>
       ) : (
-        <div className="mb-6 flex flex-wrap items-end justify-between gap-4">
-          <div>
+        <div className="mb-6 flex flex-wrap items-end justify-between gap-4 short:hidden">
+          <div className="short:hidden">
             <p className="text-sm font-semibold text-muted">Çal, dinle, keşfet</p>
             <h1 className="mt-1 text-3xl font-extrabold tracking-[-0.03em]">Müzik Laboratuvarı</h1>
           </div>
@@ -74,7 +78,7 @@ export default function MusicLab({ initial }: { initial?: string }) {
         </div>
       )}
 
-      <div className="mb-6 grid grid-cols-2 gap-3 lg:grid-cols-4" role="tablist" aria-label="Laboratuvar araçları">
+      <div className="mb-6 grid grid-cols-2 gap-3 lg:grid-cols-4 short:mb-2 short:grid-cols-[repeat(4,minmax(0,1fr))_auto] short:gap-2" role="tablist" aria-label="Laboratuvar araçları">
         {TOOLS.map((t) => {
           const active = t.id === tool;
           return (
@@ -84,23 +88,24 @@ export default function MusicLab({ initial }: { initial?: string }) {
               aria-selected={active}
               onClick={() => setTool(t.id)}
               className={cn(
-                "flex cursor-pointer items-center gap-3 rounded-2xl border p-3 text-left transition sm:p-4",
+                "flex cursor-pointer items-center gap-3 rounded-2xl border p-3 text-left transition sm:p-4 short:gap-2 short:rounded-xl short:p-2",
                 active ? "border-transparent bg-ink text-white shadow-lift" : "border-line bg-surface hover:border-line-strong",
               )}
             >
-              <span className="grid size-11 shrink-0 place-items-center rounded-xl" style={active ? { background: "rgba(255,255,255,.12)", color: "#fff" } : { background: t.tint, color: t.tone }}>
+              <span className="grid size-11 shrink-0 place-items-center rounded-xl short:size-8" style={active ? { background: "rgba(255,255,255,.12)", color: "#fff" } : { background: t.tint, color: t.tone }}>
                 <t.icon size={21} strokeWidth={1.8} />
               </span>
               <span className="min-w-0">
                 <span className="block truncate text-[14px] font-bold">{t.label}</span>
-                <span className={cn("hidden truncate text-xs sm:block", active ? "text-white/60" : "text-muted")}>{t.text}</span>
+                <span className={cn("hidden truncate text-xs sm:block short:hidden", active ? "text-white/60" : "text-muted")}>{t.text}</span>
               </span>
             </button>
           );
         })}
+        <div className="hidden short:block">{volumeControl}</div>
       </div>
 
-      <Card className="p-4 sm:p-6">
+      <Card className="p-4 sm:p-6 short:p-3">
         {tool === "piano" && <Piano />}
         {tool === "metronome" && <Metronome initialBpm={initTool === "metronome" && Number(initBpm) ? Number(initBpm) : undefined} />}
         {tool === "rhythm" && <RhythmLab />}

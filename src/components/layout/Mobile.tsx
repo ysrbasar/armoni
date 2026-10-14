@@ -23,7 +23,7 @@ export function MobileTabBar({ role, className }: { role: Role; className?: stri
     <>
       <nav
         className={cn(
-          "fixed inset-x-0 bottom-0 z-30 border-t border-line/80 bg-surface/92 pt-1.5 backdrop-blur-xl",
+          "fixed inset-x-0 bottom-0 z-30 border-t border-line/80 bg-surface/92 pt-1.5 backdrop-blur-xl short:pt-0.5",
           "pr-[max(8px,env(safe-area-inset-right))] pb-[max(8px,env(safe-area-inset-bottom))] pl-[max(8px,env(safe-area-inset-left))]",
           className,
         )}
@@ -51,7 +51,7 @@ function TabButton({ icon: Icon, label, active, onClick }: { icon: LucideIcon; l
       <span className={cn("grid h-8 w-14 place-items-center rounded-full transition-colors", active && "bg-brand-50")}>
         <Icon size={21} strokeWidth={active ? 2.2 : 1.8} />
       </span>
-      <span className="max-w-full truncate px-0.5">{label}</span>
+      <span className="max-w-full truncate px-0.5 short:hidden">{label}</span>
     </button>
   );
 }

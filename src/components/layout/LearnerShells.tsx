@@ -18,7 +18,7 @@ export function StudentShell({ children }: { children: ReactNode }) {
   return (
     <div className="min-h-dvh pb-28 md:pb-10">
       <header className="sticky top-0 z-30 border-b border-line/70 bg-canvas/85 pt-[env(safe-area-inset-top)] backdrop-blur-md">
-        <div className="mx-auto flex h-14 max-w-6xl items-center gap-4 px-4 sm:px-6 md:h-16">
+        <div className="mx-auto flex h-14 max-w-6xl items-center gap-4 px-4 sm:px-6 md:h-16 short:h-12">
           <button onClick={() => navigate("/student")} className="cursor-pointer" aria-label="Ana sayfa">
             <Logo />
           </button>
@@ -50,7 +50,7 @@ export function StudentShell({ children }: { children: ReactNode }) {
           </div>
         </div>
       </header>
-      <main className="mx-auto w-full max-w-6xl px-4 py-5 sm:px-6 lg:py-8">{children}</main>
+      <main className="mx-auto w-full max-w-6xl px-4 py-5 sm:px-6 lg:py-8 short:py-2">{children}</main>
 
       <MobileTabBar role="student" className="md:hidden" />
     </div>
