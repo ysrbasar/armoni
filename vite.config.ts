@@ -2,6 +2,7 @@ import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
 import tailwindcss from "@tailwindcss/vite";
 import { readFileSync, readdirSync, writeFileSync } from "node:fs";
+import { fileURLToPath } from "node:url";
 
 /** Derleme sonunda service worker'a önbelleğe alınacak dosya listesini ve sürümü yazar */
 function serviceWorkerManifest() {
@@ -23,8 +24,9 @@ function serviceWorkerManifest() {
 export default defineConfig({
   base: "./",
   plugins: [react(), tailwindcss(), serviceWorkerManifest()],
-  resolve: { alias: { "@": new URL("./src", import.meta.url).pathname } },
-  server: { port: 5173, host: true },
+  resolve: { alias: { "@": fileURLToPath(new URL("./src", import.meta.url)) } },
+  // Netlify geçici klasörü izlenmez (Windows dosya kilidi geliştirme sunucusunu düşürüyordu)
+  server: { port: 5173, host: true, watch: { ignored: ["**/.netlify/**"] } },
   build: {
     rollupOptions: {
       output: {

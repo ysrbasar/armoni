@@ -19,7 +19,7 @@ import { Avatar, Badge, Button, Card, CardHeader, EmptyState, Field, Modal, Prog
 import { AssignTeacherModal, AssignmentFormModal, LessonItem, LevelBadge, StudentFormModal } from "@/components/domain";
 import { InstrumentBadge } from "@/components/InstrumentIcon";
 import { LEVELS, instrumentById, levelName, pieceById } from "@/data/catalog";
-import { attendanceOf, ASSIGNMENT_STATUS, PIECE_STATUS, assignmentsOf, piecesOf, progressOf, skillState, skillsFor, stageComplete } from "@/lib/selectors";
+import { attendanceOf, ASSIGNMENT_STATUS, PIECE_STATUS, assignmentsOf, piecesOf, progressOf, skillState, skillsFor, stageComplete , ageText } from "@/lib/selectors";
 import { fmtDate, fmtDateShort, relativeDay, todayISO } from "@/lib/date";
 import { navigate } from "@/lib/router";
 import type { PieceStatus } from "@/data/types";
@@ -71,7 +71,7 @@ export default function StudentProfile({ id, back, asTeacher }: { id: string; ba
                 <span className="inline-flex items-center gap-1.5">
                   <InstrumentBadge id={s.instrument} size={22} rounded="rounded-md" /> {instrumentById[s.instrument].name}
                 </span>
-                · <LevelBadge level={s.level} /> · {s.age} yaş · {teacher.name}
+                · <LevelBadge level={s.level} /> · {ageText(s)} · {teacher.name}
               </span>
             </span>
           </span>

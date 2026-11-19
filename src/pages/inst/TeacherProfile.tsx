@@ -1,5 +1,6 @@
 import { useState } from "react";
-import { Award, BriefcaseBusiness, GraduationCap, Mail, ShieldAlert, UserRoundCog, UsersRound } from "lucide-react";
+import { Award, BriefcaseBusiness, GraduationCap, Mail, Pencil, Phone, ShieldAlert, UserRoundCog, UsersRound } from "lucide-react";
+import { EditTeacherModal } from "@/components/EditTeacherModal";
 import { useStore } from "@/store/useStore";
 import { PageHeader } from "@/components/layout/AdminShell";
 import { Avatar, Badge, Button, Card, CardHeader, EmptyState, IconButton, ProgressBar, Tabs } from "@/components/ui";
@@ -7,7 +8,7 @@ import { AssignTeacherModal, LessonItem, LevelBadge } from "@/components/domain"
 import { InstrumentBadge } from "@/components/InstrumentIcon";
 import { Donut, LEVEL_RAMP } from "@/components/charts";
 import { LEVELS, instrumentById } from "@/data/catalog";
-import { progressOf } from "@/lib/selectors";
+import { progressOf , ageText } from "@/lib/selectors";
 import { navigate } from "@/lib/router";
 import { relativeDay, todayISO } from "@/lib/date";
 import type { Student } from "@/data/types";
@@ -17,6 +18,7 @@ export default function TeacherProfile({ id }: { id: string }) {
   const instId = useStore((s) => s.session.institutionId);
   const [level, setLevel] = useState<string>("all");
   const [assigning, setAssigning] = useState<Student | null>(null);
+  const [editing, setEditing] = useState(false);
   const t = data.teachers.find((x) => x.id === id);
   if (!t || t.institutionId !== instId)
     return <EmptyState icon={ShieldAlert} title="Öğretmen bu kuruma ait değil" action={<Button onClick={() => navigate("/inst/teachers")}>Öğretmenlere dön</Button>} className="py-24" />;
@@ -31,7 +33,17 @@ export default function TeacherProfile({ id }: { id: string }) {
 
   return (
     <>
-      <PageHeader back={{ label: "Öğretmenler", to: "/inst/teachers" }} title={t.name} subtitle={t.title} />
+      <PageHeader
+        back={{ label: "Öğretmenler", to: "/inst/teachers" }}
+        title={t.name}
+        subtitle={t.title}
+        actions={
+          <Button icon={Pencil} onClick={() => setEditing(true)}>
+            Bilgileri düzenle
+          </Button>
+        }
+      />
+      <EditTeacherModal teacher={t} open={editing} onClose={() => setEditing(false)} />
 
       <div className="grid gap-6 xl:grid-cols-[340px_1fr]">
         <div className="space-y-6">
@@ -40,11 +52,24 @@ export default function TeacherProfile({ id }: { id: string }) {
               <Avatar name={t.name} size={88} />
               <p className="mt-4 text-lg font-bold">{t.name}</p>
               <p className="text-[13px] text-muted">{t.title}</p>
-              <a href={`mailto:${t.email}`} className="mt-2 inline-flex items-center gap-1.5 text-xs font-semibold text-brand-700 hover:underline">
-                <Mail size={13} /> {t.email}
-              </a>
+              {t.email && (
+                <a href={`mailto:${t.email}`} className="mt-2 inline-flex items-center gap-1.5 text-xs font-semibold text-brand-700 hover:underline">
+                  <Mail size={13} /> {t.email}
+                </a>
+              )}
+              {t.phone && (
+                <a href={`tel:${t.phone.replace(/s/g, "")}`} className="mt-1 inline-flex items-center gap-1.5 text-xs font-semibold text-brand-700 hover:underline">
+                  <Phone size={13} /> {t.phone}
+                </a>
+              )}
             </div>
-            <p className="mt-5 text-[13px] leading-relaxed text-ink-2">{t.bio}</p>
+            {t.bio ? (
+              <p className="mt-5 text-[13px] leading-relaxed text-ink-2">{t.bio}</p>
+            ) : (
+              <button type="button" onClick={() => setEditing(true)} className="mt-5 w-full cursor-pointer rounded-xl border border-dashed border-line-strong p-3 text-[13px] text-muted hover:text-ink">
+                {t.phone || t.email ? "Özgeçmiş henüz girilmedi." : "Telefon, e-posta ve özgeçmiş henüz girilmedi."} Eklemek için tıklayın.
+              </button>
+            )}
             <div className="mt-5 grid grid-cols-3 gap-2 border-t border-line pt-5 text-center">
               <div>
                 <p className="text-xl font-bold tabular-nums">{students.length}</p>
@@ -170,7 +195,7 @@ export default function TeacherProfile({ id }: { id: string }) {
                     <span className="min-w-0 flex-1">
                       <span className="block truncate text-[13.5px] font-semibold">{s.name}</span>
                       <span className="text-xs text-muted">
-                        {instrumentById[s.instrument].name} · {s.age} yaş
+                        {instrumentById[s.instrument].name} · {ageText(s)}
                       </span>
                     </span>
                   </button>

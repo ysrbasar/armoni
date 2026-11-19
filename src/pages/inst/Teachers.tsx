@@ -1,8 +1,11 @@
 import { useState } from "react";
-import { ArrowRight, CalendarX2, Search, UsersRound } from "lucide-react";
-import { useStore } from "@/store/useStore";
+import { ArrowRight, CalendarX2, Search, Trash2, UserPlus, UsersRound } from "lucide-react";
+import { deleteAccountsOf } from "@/lib/api";
+import { TENANT } from "@/lib/tenant";
+import { AddTeacherModal } from "./Accounts";
+import { flushSync, useStore } from "@/store/useStore";
 import { PageHeader } from "@/components/layout/AdminShell";
-import { Avatar, Card, EmptyState, Input, Select, Tabs } from "@/components/ui";
+import { Avatar, Button, Card, EmptyState, Input, Select, Tabs } from "@/components/ui";
 import { TeacherAttendance } from "./Attendance";
 import { InstrumentBadge } from "@/components/InstrumentIcon";
 import { LevelStrip } from "@/components/charts";
@@ -17,12 +20,43 @@ export default function InstTeachers() {
   const [q, setQ] = useState("");
   const [view, setView] = useState<"list" | "attendance">("list");
   const [course, setCourse] = useState("all");
+  const [adding, setAdding] = useState(false);
+  const deleteTeacher = useStore((s) => s.deleteTeacher);
+  const toast = useStore((s) => s.toast);
+
+  /** Öğrencisi olan öğretmen silinmez; önce öğrencileri başka öğretmene atanmalı */
+  const removeTeacher = async (id: string) => {
+    const t = data.teachers.find((x) => x.id === id)!;
+    const n = data.students.filter((s) => s.teacherId === id).length;
+    if (n > 0) {
+      alert(`${t.name} silinemez: ${n} öğrencisi var.
+
+Önce bu öğrencileri Öğrenciler sayfasından “Öğretmen ata” ile başka bir öğretmene atayın.`);
+      return;
+    }
+    if (!confirm(`${t.name} silinsin mi?
+
+Planlı dersleri ve giriş hesabı da silinir. Bu işlem geri alınamaz.`)) return;
+    if (!deleteTeacher(id)) return;
+    if (!TENANT) return;
+    try {
+      await flushSync();
+      await deleteAccountsOf([id]);
+    } catch (e) {
+      toast(e instanceof Error ? `Hesap silinemedi: ${e.message}` : "Hesap silinemedi", "error");
+    }
+  };
   const teachers = instTeachers(data, instId).filter(
     (t) => (course === "all" || t.specialties.includes(course as never)) && t.name.toLocaleLowerCase("tr").includes(q.toLocaleLowerCase("tr")),
   );
   return (
     <>
-      <PageHeader title="Öğretmenler" subtitle={`${inst.name} · ${instTeachers(data, instId).length} öğretmen`} />
+      <PageHeader
+        title="Öğretmenler"
+        subtitle={`${inst.name} · ${instTeachers(data, instId).length} öğretmen`}
+        actions={<Button icon={UserPlus} onClick={() => setAdding(true)}>Öğretmen ekle</Button>}
+      />
+      <AddTeacherModal open={adding} onClose={() => setAdding(false)} />
       <Tabs
         className="mb-5"
         value={view}
@@ -59,7 +93,14 @@ export default function InstTeachers() {
           {teachers.map((t) => {
             const st = data.students.filter((s) => s.teacherId === t.id);
             return (
-              <Card key={t.id} as="button" onClick={() => navigate(`/inst/teachers/${t.id}`)} className="group cursor-pointer p-5 text-left transition hover:-translate-y-0.5 hover:shadow-lift">
+              <Card
+                key={t.id}
+                role="link"
+                tabIndex={0}
+                onClick={() => navigate(`/inst/teachers/${t.id}`)}
+                onKeyDown={(e) => e.key === "Enter" && navigate(`/inst/teachers/${t.id}`)}
+                className="group cursor-pointer p-5 text-left transition hover:-translate-y-0.5 hover:shadow-lift"
+              >
                 <div className="flex items-start gap-4">
                   <Avatar name={t.name} size={52} />
                   <div className="min-w-0 flex-1">
@@ -87,6 +128,19 @@ export default function InstTeachers() {
                     </span>
                   </div>
                   <LevelStrip counts={[0, 1, 2, 3, 4].map((l) => st.filter((s) => s.level === l).length)} />
+                  <div className="mt-3 flex justify-end">
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        void removeTeacher(t.id);
+                      }}
+                      className="inline-flex cursor-pointer items-center gap-1 rounded-lg px-2 py-1.5 text-xs font-semibold text-rose-600 transition hover:bg-rose-50"
+                      aria-label={`${t.name} öğretmenini sil`}
+                    >
+                      <Trash2 size={15} /> Sil
+                    </button>
+                  </div>
                 </div>
               </Card>
             );

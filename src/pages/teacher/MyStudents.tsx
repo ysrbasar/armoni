@@ -6,7 +6,7 @@ import { Avatar, Card, EmptyState, Input, ProgressRing, Tabs, cn } from "@/compo
 import { LevelBadge } from "@/components/domain";
 import { InstrumentBadge } from "@/components/InstrumentIcon";
 import { LEVELS, instrumentById } from "@/data/catalog";
-import { pieceCounts, progressOf, teacherStudents } from "@/lib/selectors";
+import { pieceCounts, progressOf, teacherStudents , ageText } from "@/lib/selectors";
 import { diffDays, relativeDay, todayISO } from "@/lib/date";
 import { navigate } from "@/lib/router";
 
@@ -44,7 +44,7 @@ export default function TeacherStudents() {
                   <div className="min-w-0 flex-1">
                     <p className="truncate text-[15px] font-bold">{s.name}</p>
                     <p className="flex items-center gap-1.5 text-xs text-muted">
-                      <InstrumentBadge id={s.instrument} size={20} rounded="rounded-md" /> {instrumentById[s.instrument].name} · {s.age} yaş
+                      <InstrumentBadge id={s.instrument} size={20} rounded="rounded-md" /> {instrumentById[s.instrument].name} · {ageText(s)}
                     </p>
                   </div>
                   <ProgressRing value={p} size={46} stroke={5}>

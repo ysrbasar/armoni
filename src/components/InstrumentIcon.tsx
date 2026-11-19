@@ -52,7 +52,7 @@ const ICONS: Record<InstrumentId, (p: LucideProps) => React.ReactNode> = {
 };
 
 export function InstrumentGlyph({ id, size = 20, strokeWidth = 1.8, className }: { id: InstrumentId; size?: number; strokeWidth?: number; className?: string }) {
-  const Icon = ICONS[id];
+  const Icon = ICONS[id] ?? Music;
   return <Icon size={size} strokeWidth={strokeWidth} className={className} aria-hidden />;
 }
 

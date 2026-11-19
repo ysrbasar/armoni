@@ -1,7 +1,7 @@
 import { Flame, Lock, Music2, Sparkles, Target } from "lucide-react";
 import { useStore } from "@/store/useStore";
 import { Card, ProgressBar, cn } from "@/components/ui";
-import { achievementsOf } from "@/lib/achievements";
+import { ACHIEVEMENT_GROUPS, achievementsOf } from "@/lib/achievements";
 import { DAYS_SHORT, dayIndex, todayISO } from "@/lib/date";
 
 export default function Achievements() {
@@ -66,9 +66,16 @@ export default function Achievements() {
         </div>
       </Card>
 
-      <h2 className="mt-8 mb-4 text-lg font-bold tracking-tight">Rozetler</h2>
+      {ACHIEVEMENT_GROUPS.map((g) => {
+        const items = list.filter((a) => a.group === g);
+        return (
+      <section key={g}>
+      <h2 className="mt-8 mb-4 flex items-baseline gap-2 text-lg font-bold tracking-tight">
+        {g}
+        <span className="text-xs font-semibold text-muted">{items.filter((a) => a.earned).length}/{items.length}</span>
+      </h2>
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-        {list.map((a) => (
+        {items.map((a) => (
           <Card key={a.id} className={cn("flex items-center gap-4 p-5", !a.earned && "bg-canvas/50")}>
             <span className="relative grid size-16 shrink-0 place-items-center rounded-full" style={a.earned ? { background: a.tint, color: a.tone } : { background: "var(--color-canvas-2)", color: "var(--color-faint)" }}>
               <a.icon size={26} strokeWidth={1.7} />
@@ -93,6 +100,9 @@ export default function Achievements() {
           </Card>
         ))}
       </div>
+      </section>
+        );
+      })}
     </>
   );
 }

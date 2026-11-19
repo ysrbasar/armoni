@@ -4,7 +4,7 @@ import { PageHeader } from "@/components/layout/AdminShell";
 import { Card, CardHeader, Select, Tabs } from "@/components/ui";
 import { Donut, LEVEL_RAMP, SimpleBars } from "@/components/charts";
 import { LEVELS, instrumentById } from "@/data/catalog";
-import { instStudents, instTeachers, ASSIGNMENT_STATUS, PIECE_STATUS } from "@/lib/selectors";
+import { instStudents, instTeachers, shortName, ASSIGNMENT_STATUS, PIECE_STATUS } from "@/lib/selectors";
 import type { AssignmentStatus, PieceStatus } from "@/data/types";
 
 export default function Reports() {
@@ -22,7 +22,7 @@ export default function Reports() {
 
   const byInstrument = inst.courseIds.map((c) => ({ name: instrumentById[c].short, value: instStudents(data, instId).filter((s) => s.instrument === c).length, color: instrumentById[c].tone }));
   const perTeacher = teachers
-    .map((t) => ({ name: t.name.split(" ")[0] + " " + t.name.split(" ")[1][0] + ".", value: students.filter((s) => s.teacherId === t.id).length }))
+    .map((t) => ({ name: shortName(t.name), value: students.filter((s) => s.teacherId === t.id).length }))
     .filter((t) => t.value > 0 || course === "all")
     .sort((a, b) => b.value - a.value);
   const levels = LEVELS.map((l) => ({ name: l.name, value: students.filter((s) => s.level === l.id).length }));

@@ -1,13 +1,15 @@
 import { useState } from "react";
-import { CalendarX2, ChevronRight, GraduationCap, Pencil, Plus, Search, UserRoundCog } from "lucide-react";
-import { useStore } from "@/store/useStore";
+import { CalendarX2, ChevronRight, GraduationCap, Pencil, Plus, Search, Trash2, UserRoundCog } from "lucide-react";
+import { flushSync, useStore } from "@/store/useStore";
+import { deleteAccountsOf } from "@/lib/api";
+import { TENANT } from "@/lib/tenant";
 import { PageHeader } from "@/components/layout/AdminShell";
 import { Avatar, Button, Card, EmptyState, IconButton, Input, ProgressBar, Select, Tabs } from "@/components/ui";
 import { StudentAttendance } from "./Attendance";
 import { AssignTeacherModal, LevelBadge, StudentFormModal } from "@/components/domain";
 import { InstrumentBadge } from "@/components/InstrumentIcon";
 import { LEVELS, instrumentById } from "@/data/catalog";
-import { attendanceOf, instStudents, instTeachers, progressOf } from "@/lib/selectors";
+import { attendanceOf, instStudents, instTeachers, progressOf , ageText } from "@/lib/selectors";
 import { navigate } from "@/lib/router";
 import type { Student } from "@/data/types";
 import { cn } from "@/components/ui";
@@ -22,6 +24,28 @@ export default function InstStudents() {
   const [level, setLevel] = useState("all");
   const [view, setView] = useState<"list" | "attendance">("list");
   const [modal, setModal] = useState<{ kind: "add" } | { kind: "edit" | "assign"; student: Student } | null>(null);
+  const deleteStudent = useStore((s) => s.deleteStudent);
+  const toast = useStore((s) => s.toast);
+
+  /** Öğrenciyi; dersleri, ödevleri, ödemeleri, (başka çocuğu yoksa) velisi ve giriş hesaplarıyla birlikte siler */
+  const removeStudent = async (id: string) => {
+    const s = data.students.find((x) => x.id === id)!;
+    const lessons = data.lessons.filter((l) => l.studentId === id).length;
+    if (!confirm(`${s.name} silinsin mi?
+
+${lessons} ders, ödevleri, parçaları, ödemeleri ve giriş hesabı da silinir. Velinin başka çocuğu yoksa veli kaydı ve hesabı da kalkar.
+
+Bu işlem geri alınamaz.`)) return;
+    const parentIds = data.parents.filter((p) => p.childIds.length === 1 && p.childIds[0] === id).map((p) => p.id);
+    deleteStudent(id);
+    if (!TENANT) return;
+    try {
+      await flushSync();
+      await deleteAccountsOf([id, ...parentIds]);
+    } catch (e) {
+      toast(e instanceof Error ? `Hesap silinemedi: ${e.message}` : "Hesap silinemedi", "error");
+    }
+  };
 
   const students = instStudents(data, instId);
   const teachers = instTeachers(data, instId);
@@ -137,7 +161,7 @@ export default function InstStudents() {
                           <Avatar name={s.name} size={34} />
                           <span>
                             <span className="block font-semibold">{s.name}</span>
-                            <span className="text-xs text-muted">{s.age} yaş · {inst.branches.find((b) => b.id === s.branchId)?.name}</span>
+                            <span className="text-xs text-muted">{ageText(s)} · {inst.branches.find((b) => b.id === s.branchId)?.name}</span>
                           </span>
                         </span>
                       </td>
@@ -165,6 +189,14 @@ export default function InstStudents() {
                           <IconButton icon={UserRoundCog} label="Öğretmen ata" onClick={() => setModal({ kind: "assign", student: s })} />
                           <IconButton icon={Pencil} label="Düzenle" onClick={() => setModal({ kind: "edit", student: s })} />
                           <IconButton icon={ChevronRight} label="Detay" onClick={() => navigate(`/inst/students/${s.id}`)} />
+                          <button
+                            type="button"
+                            onClick={() => removeStudent(s.id)}
+                            className="ml-1 inline-flex cursor-pointer items-center gap-1 rounded-lg px-2 py-1.5 text-xs font-semibold text-rose-600 transition hover:bg-rose-50"
+                            aria-label={`${s.name} öğrencisini sil`}
+                          >
+                            <Trash2 size={15} /> Sil
+                          </button>
                         </span>
                       </td>
                     </tr>

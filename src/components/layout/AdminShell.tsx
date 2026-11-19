@@ -1,35 +1,48 @@
-import type { ReactNode } from "react";
+import { useState, type ReactNode } from "react";
+import { TENANT } from "@/lib/tenant";
 import { BellButton, MobileTabBar } from "./Mobile";
-import { Building2, Check, ChevronsLeft, ChevronsRight, ChevronDown, LogOut, RotateCcw, UserRoundCog } from "lucide-react";
+import { Building2, Check, ChevronsLeft, ChevronsRight, ChevronDown, KeyRound, LogOut, RotateCcw, UserRoundCog } from "lucide-react";
+import { ChangePasswordForm } from "@/pages/AuthPanel";
 import { useStore } from "@/store/useStore";
 import { NAV, ROLE_META, isActive } from "@/lib/nav";
 import { navigate, usePath } from "@/lib/router";
 import type { Role } from "@/data/types";
-import { Avatar, Menu, MenuItem, cn } from "../ui";
+import { Avatar, Menu, MenuItem, Modal, cn } from "../ui";
 import { Logo, LogoMark } from "../Logo";
 
 export function useCurrentUser() {
   const session = useStore((s) => s.session);
   const data = useStore((s) => s.data);
-  const inst = data.institutions.find((i) => i.id === session.institutionId)!;
+  const account = useStore((s) => s.user);
+  const inst = data.institutions.find((i) => i.id === session.institutionId);
+  const fallback = account?.name ?? "";
   switch (session.role) {
     case "platform":
       return { name: "Elif Aydın", sub: "Platform yöneticisi" };
     case "inst":
-      return { name: inst.adminName, sub: `${inst.short} · Kurum yöneticisi` };
+      return { name: account?.name ?? inst?.adminName ?? "Yönetici", sub: `${inst?.short ?? ""} · Kurum yöneticisi` };
     case "teacher": {
-      const t = data.teachers.find((x) => x.id === session.teacherId)!;
-      return { name: t.name, sub: t.title };
+      const t = data.teachers.find((x) => x.id === session.teacherId);
+      return { name: t?.name ?? fallback, sub: t?.title ?? "Öğretmen" };
     }
     case "student": {
-      const s = data.students.find((x) => x.id === session.studentId)!;
-      return { name: s.name, sub: "Öğrenci" };
+      const s = data.students.find((x) => x.id === session.studentId);
+      return { name: s?.name ?? fallback, sub: "Öğrenci" };
     }
     default: {
-      const p = data.parents.find((x) => x.id === session.parentId)!;
-      return { name: p.name, sub: "Veli" };
+      const p = data.parents.find((x) => x.id === session.parentId);
+      return { name: p?.name ?? fallback, sub: "Veli" };
     }
   }
+}
+
+/** Kendi şifresini değiştirme penceresi (profil menüsü ve mobil "Daha" sayfasından açılır) */
+export function PasswordModal({ open, onClose }: { open: boolean; onClose: () => void }) {
+  return (
+    <Modal open={open} onClose={onClose} title="Şifremi değiştir" subtitle="Şifre değişince diğer cihazlardaki oturumlarınız kapanır." size="sm">
+      <ChangePasswordForm onDone={onClose} />
+    </Modal>
+  );
 }
 
 export function ProfileMenu({ compact }: { compact?: boolean }) {
@@ -37,7 +50,10 @@ export function ProfileMenu({ compact }: { compact?: boolean }) {
   const logout = useStore((s) => s.logout);
   const reset = useStore((s) => s.resetDemo);
   const role = useStore((s) => s.session.role)!;
+  const [pw, setPw] = useState(false);
   return (
+    <>
+    <PasswordModal open={pw} onClose={() => setPw(false)} />
     <Menu
       width={250}
       trigger={(open) => (
@@ -63,25 +79,39 @@ export function ProfileMenu({ compact }: { compact?: boolean }) {
             </div>
           </div>
           <div className="my-1 h-px bg-line" />
-          <MenuItem
-            icon={UserRoundCog}
-            onClick={() => {
-              close();
-              logout();
-              navigate("/");
-            }}
-          >
-            Rol değiştir
-          </MenuItem>
-          <MenuItem
-            icon={RotateCcw}
-            onClick={() => {
-              close();
-              reset();
-            }}
-          >
-            Demo verilerini sıfırla
-          </MenuItem>
+          {TENANT ? (
+            <MenuItem
+              icon={KeyRound}
+              onClick={() => {
+                close();
+                setPw(true);
+              }}
+            >
+              Şifremi değiştir
+            </MenuItem>
+          ) : (
+            <MenuItem
+              icon={UserRoundCog}
+              onClick={() => {
+                close();
+                logout();
+                navigate("/");
+              }}
+            >
+              Rol değiştir
+            </MenuItem>
+          )}
+          {!TENANT && (
+            <MenuItem
+              icon={RotateCcw}
+              onClick={() => {
+                close();
+                reset();
+              }}
+            >
+              Demo verilerini sıfırla
+            </MenuItem>
+          )}
           <div className="my-1 h-px bg-line" />
           <MenuItem
             icon={LogOut}
@@ -97,10 +127,12 @@ export function ProfileMenu({ compact }: { compact?: boolean }) {
         </>
       )}
     </Menu>
+    </>
   );
 }
 
 export function DemoPill({ className }: { className?: string }) {
+  if (TENANT) return null;
   return (
     <span className={cn("inline-flex items-center gap-1.5 rounded-full border border-dashed border-brand-200 bg-brand-50/60 px-2.5 py-1 text-[11px] font-semibold text-brand-700", className)}>
       <span className="size-1.5 animate-pulse rounded-full bg-brand-500" />

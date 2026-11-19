@@ -1,5 +1,6 @@
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
+import { TENANT } from "@/lib/tenant";
 import { createSeed } from "@/data/seed";
 import type {
   Attendance,
@@ -18,7 +19,13 @@ import type {
   Student,
 } from "@/data/types";
 import { dayIndex, todayISO } from "@/lib/date";
-import { pieceById, skillById, levelName } from "@/data/catalog";
+import { ALL_PIECES, ALL_SKILLS, CURRICULA, applyCatalog, armoniCurriculumId, instrumentById, pieceById, skillById, levelName } from "@/data/catalog";
+import { copyCurriculum, generateCurriculum, INSTRUMENT_COLORS, slugify } from "@/data/curriculum";
+import type { Curriculum, Instrument, InstrumentFamily, Piece, Skill } from "@/data/types";
+import { api, type AppUser, type Changes } from "@/lib/api";
+import type { Parent, Teacher } from "@/data/types";
+
+export type NewTeacher = Pick<Teacher, "name" | "title" | "specialties" | "email">;
 
 export interface Session {
   role: Role | null;
@@ -45,6 +52,28 @@ interface State {
   toasts: Toast[];
   sidebarCollapsed: boolean;
 
+  /** Sunucu oturumu */
+  user: AppUser | null;
+  setupRequired: boolean;
+  booted: boolean;
+  boot: () => Promise<void>;
+  applyUser: (user: AppUser, data?: Partial<DemoData>) => void;
+  addTeacher: (t: NewTeacher) => string;
+  updateTeacher: (id: string, patch: Partial<Teacher>) => void;
+  setRooms: (rooms: string[], rename?: { from: string; to: string }) => void;
+  addParent: (studentId: string, name: string) => string;
+
+  /* Müfredat (yalnızca kurum) */
+  addCurriculum: (instrumentId: string, frameworkId: string) => string;
+  duplicateCurriculum: (curriculumId: string) => string;
+  setActiveCurriculum: (instrumentId: string, curriculumId: string) => void;
+  updateCurriculum: (curriculumId: string, patch: Partial<Curriculum>) => void;
+  removeCurriculum: (curriculumId: string) => void;
+  saveSkill: (skill: Skill) => void;
+  saveCatalogPiece: (piece: Piece) => void;
+  addInstrument: (input: { name: string; family: InstrumentFamily; color: number; frameworkId: string }) => string;
+  updateInstrument: (id: string, patch: Partial<Instrument>) => void;
+
   login: (role: Role) => void;
   logout: () => void;
   setInstitution: (id: string) => void;
@@ -60,6 +89,12 @@ interface State {
   assignTeacher: (studentId: string, teacherId: string) => void;
 
   addLesson: (l: NewLesson) => void;
+  /** Aynı dersi verilen tarihlere seri olarak ekler; seri kimliğini döner */
+  addLessonSeries: (l: NewLesson, dates: string[]) => string;
+  updateLessonSeries: (lessonId: string, patch: Partial<Lesson>, dayShift: number) => number;
+  deleteLessons: (ids: string[]) => void;
+  deleteStudent: (id: string) => void;
+  deleteTeacher: (id: string) => boolean;
   updateLesson: (id: string, patch: Partial<Lesson>) => void;
   completeLesson: (id: string, patch: Partial<Lesson>) => void;
 
@@ -82,7 +117,7 @@ interface State {
 
 const DEFAULT_SESSION: Session = {
   role: null,
-  institutionId: "armoni",
+  institutionId: TENANT?.institution.id ?? "armoni",
   teacherId: "t1",
   studentId: "s1",
   parentId: "p1",
@@ -90,6 +125,8 @@ const DEFAULT_SESSION: Session = {
 };
 
 let toastId = 0;
+/** Kimliğe göre ekle ya da değiştir */
+const upsert = <T extends { id: string }>(arr: T[], rec: T): T[] => (arr.some((x) => x.id === rec.id) ? arr.map((x) => (x.id === rec.id ? rec : x)) : [...arr, rec]);
 const uid = (p: string) => `${p}${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`;
 
 export const useStore = create<State>()(
@@ -113,8 +150,176 @@ export const useStore = create<State>()(
         toasts: [],
         sidebarCollapsed: false,
 
+        user: null,
+        setupRequired: false,
+        booted: false,
+
+        boot: async () => {
+          // Demo: sunucu yok, veri tarayıcıda
+          if (!TENANT) {
+            applyCatalog(get().data);
+            set({ booted: true });
+            return;
+          }
+          try {
+            const r = await api.state();
+            if (r.user && !r.user.mustChange) get().applyUser(r.user, r.data);
+            else set({ user: r.user, setupRequired: r.setupRequired });
+          } catch (e) {
+            get().toast(e instanceof Error ? e.message : "Sunucuya ulaşılamadı", "error");
+          }
+          set({ booted: true });
+        },
+
+        applyUser: (user, remote) => {
+          const data: DemoData = { ...createSeed(), ...(remote ?? {}) };
+          applyCatalog(data);
+          const parent = user.role === "parent" ? data.parents.find((p) => p.id === user.entityId) : undefined;
+          const child = parent?.childIds[0] ?? "";
+          remoteApply(() =>
+            set({
+              user,
+              setupRequired: false,
+              data,
+              session: {
+                role: user.role,
+                institutionId: data.institutions[0]?.id ?? DEFAULT_SESSION.institutionId,
+                teacherId: user.role === "teacher" ? user.entityId : "",
+                studentId: user.role === "student" ? user.entityId : "",
+                parentId: user.role === "parent" ? user.entityId : "",
+                childId: user.role === "student" ? user.entityId : child,
+              },
+            }),
+          );
+        },
+
+        addTeacher: (input) => {
+          const id = uid("t");
+          const t: Teacher = {
+            ...input,
+            id,
+            institutionId: get().session.institutionId,
+            bio: "",
+            levels: [0, 1, 2, 3, 4],
+            education: [],
+            certificates: [],
+            experience: [],
+            experienceYears: 0,
+            capacity: 20,
+          };
+          set((st) => ({
+            data: withActivity({ ...st.data, teachers: [...st.data.teachers, t] }, activity(t.institutionId, "teacher", `${t.name} kurum ekibine katıldı`)),
+          }));
+          get().toast(`${t.name} eklendi`);
+          return id;
+        },
+
+        updateTeacher: (id, patch) => {
+          set((st) => ({ data: { ...st.data, teachers: st.data.teachers.map((t) => (t.id === id ? { ...t, ...patch } : t)) } }));
+          get().toast("Öğretmen bilgileri güncellendi");
+        },
+
+        setRooms: (rooms, rename) => {
+          const instId = get().session.institutionId;
+          const ren = (r?: string) => (rename && r === rename.from ? rename.to : r);
+          set((st) => ({
+            data: {
+              ...st.data,
+              institutions: st.data.institutions.map((i) => (i.id === instId ? { ...i, rooms } : i)),
+              // Derslik yeniden adlandırıldıysa dersler ve öğretmenler de yeni adı alır
+              lessons: rename ? st.data.lessons.map((l) => (l.room === rename.from ? { ...l, room: rename.to } : l)) : st.data.lessons,
+              teachers: rename ? st.data.teachers.map((t) => (t.room === rename.from ? { ...t, room: ren(t.room) } : t)) : st.data.teachers,
+            },
+          }));
+        },
+
+        addParent: (studentId, name) => {
+          const id = uid("p");
+          const p: Parent = { id, name, childIds: [studentId] };
+          set((st) => ({
+            data: {
+              ...st.data,
+              parents: [...st.data.parents, p],
+              students: st.data.students.map((s) => (s.id === studentId ? { ...s, parentId: id } : s)),
+            },
+          }));
+          get().toast(`Veli eklendi: ${name}`);
+          return id;
+        },
+
+        addCurriculum: (instrumentId, frameworkId) => {
+          const { curriculum, skills, pieces } = generateCurriculum(instrumentById[instrumentId], frameworkId);
+          set((st) => ({ data: { ...st.data, curricula: [...st.data.curricula, curriculum], skills: [...st.data.skills, ...skills], pieces: [...st.data.pieces, ...pieces] } }));
+          get().toast(`Program eklendi: ${curriculum.name}`);
+          return curriculum.id;
+        },
+
+        duplicateCurriculum: (cid) => {
+          const src = CURRICULA.find((c) => c.id === cid)!;
+          const of = (x: { curriculumId?: string; instrument: string; hidden?: boolean }) => !x.hidden && (x.curriculumId ?? armoniCurriculumId(x.instrument)) === cid;
+          const copy = copyCurriculum(src, ALL_SKILLS.filter(of), ALL_PIECES.filter(of), `${src.name} (kurum kopyası)`);
+          set((st) => ({ data: { ...st.data, curricula: [...st.data.curricula, copy.curriculum], skills: [...st.data.skills, ...copy.skills], pieces: [...st.data.pieces, ...copy.pieces] } }));
+          get().toast("Program kopyalandı; kopyayı serbestçe düzenleyebilirsiniz");
+          return copy.curriculum.id;
+        },
+
+        setActiveCurriculum: (instrumentId, cid) => {
+          get().updateInstrument(instrumentId, { activeCurriculumId: cid });
+          get().toast("Aktif program değişti; öğrenci ve öğretmen ekranları bu programı kullanır");
+        },
+
+        updateCurriculum: (cid, patch) => {
+          const base = CURRICULA.find((c) => c.id === cid) ?? get().data.curricula.find((c) => c.id === cid)!;
+          set((st) => ({ data: { ...st.data, curricula: upsert(st.data.curricula, { ...base, ...st.data.curricula.find((c) => c.id === cid), ...patch }) } }));
+        },
+
+        removeCurriculum: (cid) => {
+          const c = CURRICULA.find((x) => x.id === cid)!;
+          if (instrumentById[c.instrument].activeCurriculumId === cid) get().updateInstrument(c.instrument, { activeCurriculumId: undefined });
+          get().updateCurriculum(cid, { hidden: true });
+          get().toast("Program kaldırıldı", "info");
+        },
+
+        saveSkill: (skill) => set((st) => ({ data: { ...st.data, skills: upsert(st.data.skills, skill) } })),
+        saveCatalogPiece: (piece) => set((st) => ({ data: { ...st.data, pieces: upsert(st.data.pieces, piece) } })),
+
+        updateInstrument: (id, patch) => {
+          const base = instrumentById[id];
+          set((st) => ({ data: { ...st.data, instruments: upsert(st.data.instruments, { ...base, ...st.data.instruments.find((i) => i.id === id), ...patch }) } }));
+        },
+
+        addInstrument: ({ name, family, color, frameworkId }) => {
+          let id = slugify(name) || "enstruman";
+          const taken = (x: string) => get().data.instruments.some((i) => i.id === x) || ["piano", "guitar", "violin", "baglama", "drums", "voice", "flute", "theory"].includes(x);
+          for (let n = 2; taken(id); n++) id = `${slugify(name) || "enstruman"}-${n}`;
+          const [tint, tone] = INSTRUMENT_COLORS[color % INSTRUMENT_COLORS.length];
+          const ins: Instrument = { id, name, short: name, tint, tone, goals: [], family, custom: true };
+          const { curriculum, skills, pieces } = generateCurriculum(ins, frameworkId);
+          ins.activeCurriculumId = curriculum.id;
+          const instId = get().session.institutionId;
+          set((st) => ({
+            data: {
+              ...st.data,
+              instruments: [...st.data.instruments, ins],
+              curricula: [...st.data.curricula, curriculum],
+              skills: [...st.data.skills, ...skills],
+              pieces: [...st.data.pieces, ...pieces],
+              institutions: st.data.institutions.map((i) => (i.id === instId && !i.courseIds.includes(id) ? { ...i, courseIds: [...i.courseIds, id] } : i)),
+            },
+          }));
+          get().toast(`${name} eklendi; programı hazır`);
+          return id;
+        },
+
         login: (role) => set((st) => ({ session: { ...st.session, role } })),
-        logout: () => set((st) => ({ session: { ...st.session, role: null } })),
+        logout: () => {
+          if (!TENANT) {
+            set((st) => ({ session: { ...st.session, role: null } }));
+            return;
+          }
+          api.logout().catch(() => undefined);
+          remoteApply(() => set({ user: null, data: createSeed(), session: { ...DEFAULT_SESSION, role: null } }));
+        },
         setInstitution: (id) => set((st) => ({ session: { ...st.session, institutionId: id } })),
         setChild: (id) => set((st) => ({ session: { ...st.session, childId: id } })),
         setTeacher: (id) => set((st) => ({ session: { ...st.session, teacherId: id } })),
@@ -205,6 +410,87 @@ export const useStore = create<State>()(
             ),
           }));
           get().toast("Ders takvime eklendi");
+        },
+
+        addLessonSeries: (l, dates) => {
+          const seriesId = dates.length > 1 ? uid("ser") : undefined;
+          const items: Lesson[] = dates.map((date) => ({ ...l, date, id: uid("l"), seriesId, status: "scheduled", gains: [], notes: "", nextGoal: "", pieceIds: l.pieceIds ?? [] }));
+          set((st) => ({
+            data: withActivity(
+              { ...st.data, lessons: [...st.data.lessons, ...items] },
+              activity(l.institutionId, "lesson", `${student(l.studentId).name} için ${items.length > 1 ? `${items.length} derslik program` : "yeni ders"} planlandı`),
+            ),
+          }));
+          get().toast(items.length > 1 ? `${items.length} ders takvime işlendi` : "Ders takvime eklendi");
+          return seriesId ?? "";
+        },
+
+        updateLessonSeries: (lessonId, patch, dayShift) => {
+          const base = get().data.lessons.find((x) => x.id === lessonId)!;
+          const shift = (iso: string) => {
+            const [y, m, d] = iso.split("-").map(Number);
+            const t = new Date(y, m - 1, d + dayShift);
+            return `${t.getFullYear()}-${String(t.getMonth() + 1).padStart(2, "0")}-${String(t.getDate()).padStart(2, "0")}`;
+          };
+          let n = 0;
+          set((st) => ({
+            data: {
+              ...st.data,
+              lessons: st.data.lessons.map((x) => {
+                if (x.seriesId !== base.seriesId || x.date < base.date || x.status !== "scheduled") return x;
+                n++;
+                const { date: _d, ...rest } = patch;
+                return { ...x, ...rest, date: dayShift ? shift(x.date) : x.date };
+              }),
+            },
+          }));
+          get().toast(`${n} ders güncellendi`);
+          return n;
+        },
+
+        deleteLessons: (ids) => {
+          set((st) => ({ data: { ...st.data, lessons: st.data.lessons.filter((x) => !ids.includes(x.id)) } }));
+          get().toast(ids.length > 1 ? `${ids.length} ders silindi` : "Ders silindi", "info");
+        },
+
+        deleteStudent: (id) => {
+          const s = student(id);
+          set((st) => ({
+            data: withActivity(
+              {
+                ...st.data,
+                students: st.data.students.filter((x) => x.id !== id),
+                lessons: st.data.lessons.filter((x) => x.studentId !== id),
+                assignments: st.data.assignments.filter((x) => x.studentId !== id),
+                studentPieces: st.data.studentPieces.filter((x) => x.studentId !== id),
+                payments: st.data.payments.filter((x) => x.studentId !== id),
+                // Velinin başka çocuğu yoksa veli kaydı da kalkar
+                parents: st.data.parents
+                  .map((p) => (p.childIds.includes(id) ? { ...p, childIds: p.childIds.filter((c) => c !== id) } : p))
+                  .filter((p) => p.childIds.length > 0),
+              },
+              activity(s.institutionId, "student", `${s.name} kaydı silindi`),
+            ),
+          }));
+          get().toast(`${s.name} silindi`, "info");
+        },
+
+        deleteTeacher: (id) => {
+          const t = teacher(id);
+          if (get().data.students.some((s) => s.teacherId === id)) return false;
+          set((st) => ({
+            data: withActivity(
+              {
+                ...st.data,
+                teachers: st.data.teachers.filter((x) => x.id !== id),
+                lessons: st.data.lessons.filter((x) => !(x.teacherId === id && x.status === "scheduled")),
+                teacherAbsences: st.data.teacherAbsences.filter((x) => x.teacherId !== id),
+              },
+              activity(t.institutionId, "teacher", `${t.name} kurumdan çıkarıldı`),
+            ),
+          }));
+          get().toast(`${t.name} silindi`, "info");
+          return true;
         },
 
         updateLesson: (id, patch) => {
@@ -426,11 +712,92 @@ export const useStore = create<State>()(
       };
     },
     {
-      name: "armoni-demo-v2",
-      partialize: (st) => ({ data: st.data, session: st.session, sidebarCollapsed: st.sidebarCollapsed }),
+      name: TENANT?.storageKey ?? "armoni-demo-v3",
+      // Kurumda veri ve oturum sunucuda; demoda veri tarayıcıda saklanır
+      partialize: (st) => (TENANT ? { sidebarCollapsed: st.sidebarCollapsed } : { data: st.data, session: st.session, sidebarCollapsed: st.sidebarCollapsed }),
+      onRehydrateStorage: () => (st) => {
+        if (st && !TENANT) applyCatalog(st.data);
+      },
     },
   ),
 );
+
+/* ───────────── Sunucuyla eşitleme ─────────────
+   Her işlem önce ekranda uygulanır; değişen kayıtlar kısa bir gecikmeyle sunucuya gönderilir.
+   Kayıtlar değiştirilmeden (immutable) güncellendiği için "değişti mi" sorusu referans karşılaştırmasıdır. */
+
+const SYNCED = ["instruments", "curricula", "skills", "pieces", "institutions", "teachers", "students", "parents", "studentPieces", "assignments", "lessons", "activities", "payments", "teacherAbsences"] as const;
+
+let lastSynced: DemoData | null = null;
+let applyingRemote = false;
+let timer: ReturnType<typeof setTimeout> | undefined;
+let inflight: Promise<void> = Promise.resolve();
+
+function remoteApply(fn: () => void) {
+  applyingRemote = true;
+  try {
+    fn();
+  } finally {
+    applyingRemote = false;
+  }
+  lastSynced = useStore.getState().data;
+}
+
+function diff(prev: DemoData, next: DemoData): Changes | null {
+  const out: Changes = {};
+  let any = false;
+  for (const k of SYNCED) {
+    const a = prev[k] as { id: string }[];
+    const b = next[k] as { id: string }[];
+    if (a === b) continue;
+    const before = new Map(a.map((x) => [x.id, x]));
+    const upsert = b.filter((x) => before.get(x.id) !== x);
+    const after = new Set(b.map((x) => x.id));
+    // Ekrandaki aktivite listesi kısaltılır; bu bir silme isteği değildir
+    const del = k === "activities" ? [] : a.filter((x) => !after.has(x.id)).map((x) => x.id);
+    if (upsert.length || del.length) {
+      out[k] = { upsert, delete: del };
+      any = true;
+    }
+  }
+  return any ? out : null;
+}
+
+/** Bekleyen değişiklikleri hemen gönderir (ör. hesap açmadan önce kaydın sunucuda olması için) */
+export function flushSync(): Promise<void> {
+  clearTimeout(timer);
+  inflight = inflight.then(async () => {
+    const st = useStore.getState();
+    if (!lastSynced || !st.user || st.user.mustChange) return;
+    const snapshot = st.data;
+    const changes = diff(lastSynced, snapshot);
+    if (!changes) return;
+    try {
+      const r = await api.sync(changes);
+      lastSynced = snapshot;
+      if (r.rejected) st.toast("Bazı değişiklikler için yetkiniz yok; kaydedilmedi", "error");
+    } catch (e) {
+      st.toast(e instanceof Error ? `Kaydedilemedi: ${e.message}` : "Kaydedilemedi", "error");
+      // Ekranı sunucudaki doğru hale döndür
+      if (e && typeof e === "object" && "status" in e && (e as { status: number }).status === 401) st.logout();
+      else await useStore.getState().boot();
+    }
+  });
+  return inflight;
+}
+
+useStore.subscribe((s, p) => {
+  // Katalog değiştiyse ekrandaki enstrüman/kazanım/parça listelerini yenile (ekran çizilmeden önce)
+  if (s.data.instruments !== p.data.instruments || s.data.skills !== p.data.skills || s.data.pieces !== p.data.pieces || s.data.curricula !== p.data.curricula) applyCatalog(s.data);
+  if (s.data === p.data || applyingRemote || !s.user) return;
+  clearTimeout(timer);
+  timer = setTimeout(() => void flushSync(), 400);
+});
+
+if (typeof window !== "undefined") {
+  // Sekme kapanırken bekleyen değişiklik kalmasın
+  window.addEventListener("pagehide", () => void flushSync());
+}
 
 /** Bir parça ödevle ilişkili mi — parça detayında kullanılır */
 export const pieceTitle = (id?: string) => (id ? pieceById[id]?.title : undefined);

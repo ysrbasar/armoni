@@ -1,4 +1,4 @@
-import type { Instrument, InstrumentId, Level, Piece, Skill } from "./types";
+import type { Curriculum, DemoData, Instrument, InstrumentFamily, InstrumentId, Level, Piece, Skill } from "./types";
 
 export const LEVELS: { id: Level; name: string; stage: string }[] = [
   { id: 0, name: "Başlangıç", stage: "Başlangıç" },
@@ -10,7 +10,7 @@ export const LEVELS: { id: Level; name: string; stage: string }[] = [
 
 export const levelName = (l: Level) => LEVELS[l].name;
 
-export const INSTRUMENTS: Instrument[] = [
+const BUILTIN_INSTRUMENT_DEFS: Instrument[] = [
   {
     id: "piano",
     name: "Piyano",
@@ -77,7 +77,16 @@ export const INSTRUMENTS: Instrument[] = [
   },
 ];
 
-export const instrumentById = Object.fromEntries(INSTRUMENTS.map((i) => [i.id, i])) as Record<InstrumentId, Instrument>;
+const FAMILY_OF: Record<string, InstrumentFamily> = { piano: "klavye", guitar: "telli", baglama: "telli", violin: "yayli", flute: "uflemeli", drums: "vurmali", voice: "ses", theory: "kuram" };
+export const BUILTIN_INSTRUMENTS: Instrument[] = BUILTIN_INSTRUMENT_DEFS.map((i) => ({ ...i, family: FAMILY_OF[i.id] }));
+
+/** Ekranda kullanılan enstrüman listesi: hazır olanlar + kurumun ekledikleri (applyCatalog günceller) */
+export const INSTRUMENTS: Instrument[] = [...BUILTIN_INSTRUMENTS];
+const instrumentMap: Record<string, Instrument> = Object.fromEntries(BUILTIN_INSTRUMENTS.map((i) => [i.id, i]));
+/** Bilinmeyen bir kimlikte uygulama çökmesin diye genel bir enstrüman döner */
+export const instrumentById = new Proxy(instrumentMap, {
+  get: (t, k: string) => t[k] ?? { id: k, name: k, short: k, tint: "#eef0f4", tone: "#5c6178", goals: [], family: "telli" },
+}) as Record<InstrumentId, Instrument>;
 
 type SkillDef = [string, string];
 
@@ -140,7 +149,7 @@ const SKILL_DEFS: Record<InstrumentId, SkillDef[][]> = {
   ],
 };
 
-export const SKILLS: Skill[] = INSTRUMENTS.flatMap((ins) =>
+export const BUILTIN_SKILLS: Skill[] = BUILTIN_INSTRUMENTS.flatMap((ins) =>
   SKILL_DEFS[ins.id].flatMap((stage, s) =>
     stage.map(([title, description], i) => ({
       id: `${ins.id}-k${s}${i}`,
@@ -152,9 +161,12 @@ export const SKILLS: Skill[] = INSTRUMENTS.flatMap((ins) =>
   ),
 );
 
-export const skillById = Object.fromEntries(SKILLS.map((s) => [s.id, s])) as Record<string, Skill>;
+/** Etkin programlardaki kazanımlar (applyCatalog günceller) */
+export const SKILLS: Skill[] = [...BUILTIN_SKILLS];
+/** Tüm kazanımlar (etkin olmayan programlar dahil): eski kayıtlar da adını bulabilsin */
+export const skillById: Record<string, Skill> = Object.fromEntries(BUILTIN_SKILLS.map((s) => [s.id, s]));
 
-export const PIECES: Piece[] = [
+export const BUILTIN_PIECES: Piece[] = [
   { id: "p01", title: "Ode to Joy", composer: "L. v. Beethoven", instrument: "piano", level: 0, tempo: 80 },
   { id: "p02", title: "Menüet Sol Majör", composer: "J. S. Bach", instrument: "piano", level: 2, tempo: 96 },
   { id: "p03", title: "Für Elise", composer: "L. v. Beethoven", instrument: "piano", level: 3, tempo: 120 },
@@ -189,4 +201,66 @@ export const PIECES: Piece[] = [
   { id: "p26", title: "Bach Koralleri Analizi", composer: "J. S. Bach", instrument: "theory", level: 3, tempo: 60 },
 ];
 
-export const pieceById = Object.fromEntries(PIECES.map((p) => [p.id, p])) as Record<string, Piece>;
+/** Etkin programlardaki parçalar (applyCatalog günceller) */
+export const PIECES: Piece[] = [...BUILTIN_PIECES];
+export const pieceById: Record<string, Piece> = Object.fromEntries(BUILTIN_PIECES.map((p) => [p.id, p]));
+
+/* ───────────── Düzenlenebilir katalog ─────────────
+   Hazır enstrüman, kazanım ve parçalar koddadır; kurumun eklediği ya da değiştirdiği kayıtlar
+   veritabanında durur ve aynı kimlikle hazır olanın üzerine yazar. Silme yerine "hidden" kullanılır,
+   böylece eski öğrenci kayıtları bağlı oldukları kazanımın adını bulmaya devam eder. */
+
+/** Her enstrümanın hazır programı */
+export const armoniCurriculumId = (instrument: InstrumentId) => `armoni-${instrument}`;
+export const curriculumOf = (x: { curriculumId?: string; instrument: InstrumentId }) => x.curriculumId ?? armoniCurriculumId(x.instrument);
+export const activeCurriculumOf = (instrument: InstrumentId) => instrumentMap[instrument]?.activeCurriculumId ?? armoniCurriculumId(instrument);
+
+export function armoniCurriculum(instrument: InstrumentId): Curriculum {
+  return {
+    id: armoniCurriculumId(instrument),
+    instrument,
+    name: "Armoni temel programı",
+    frameworkId: "armoni",
+    region: "Kurum",
+    description: "Uygulamayla birlikte gelen 5 seviyelik temel program.",
+    levelLabels: LEVELS.map((l) => l.name),
+    createdAt: "2026-01-01",
+  };
+}
+
+/** Kurumun programları (hazır Armoni programları dahil, gizlenenler hariç) */
+export const CURRICULA: Curriculum[] = BUILTIN_INSTRUMENTS.map((i) => armoniCurriculum(i.id));
+export const ALL_SKILLS: Skill[] = [...BUILTIN_SKILLS];
+export const ALL_PIECES: Piece[] = [...BUILTIN_PIECES];
+
+function mergeById<T extends { id: string }>(base: T[], over: T[] | undefined): T[] {
+  const m = new Map(base.map((x) => [x.id, x]));
+  for (const x of over ?? []) m.set(x.id, { ...m.get(x.id), ...x });
+  return [...m.values()];
+}
+const refill = <T,>(arr: T[], items: T[]) => arr.splice(0, arr.length, ...items);
+const refillMap = <T,>(map: Record<string, T>, entries: [string, T][]) => {
+  for (const k of Object.keys(map)) delete map[k];
+  for (const [k, v] of entries) map[k] = v;
+};
+
+/** Veritabanındaki katalog kayıtlarını hazır olanlarla birleştirip ekranda kullanılan listeleri yeniler */
+export function applyCatalog(data: Pick<DemoData, "instruments" | "skills" | "pieces" | "curricula">) {
+  const instruments = mergeById(BUILTIN_INSTRUMENTS, data.instruments);
+  refillMap(instrumentMap, instruments.map((i) => [i.id, i]));
+  refill(INSTRUMENTS, instruments.filter((i) => !i.hidden));
+
+  // Hazır Armoni programı yalnızca hazır enstrümanlarda vardır; yeni enstrümanlar kendi programıyla gelir
+  const curricula = mergeById(BUILTIN_INSTRUMENTS.map((i) => armoniCurriculum(i.id)), data.curricula);
+  refill(CURRICULA, curricula.filter((c) => !c.hidden));
+
+  const skills = mergeById(BUILTIN_SKILLS, data.skills);
+  refill(ALL_SKILLS, skills);
+  refillMap(skillById, skills.map((x) => [x.id, x]));
+  refill(SKILLS, skills.filter((x) => !x.hidden && curriculumOf(x) === activeCurriculumOf(x.instrument)));
+
+  const pieces = mergeById(BUILTIN_PIECES, data.pieces);
+  refill(ALL_PIECES, pieces);
+  refillMap(pieceById, pieces.map((x) => [x.id, x]));
+  refill(PIECES, pieces.filter((x) => !x.hidden && curriculumOf(x) === activeCurriculumOf(x.instrument)));
+}

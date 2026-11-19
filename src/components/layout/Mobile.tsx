@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
-import { Bell, BellOff, BellRing, Download, Ellipsis, LogOut, RotateCcw, Share, SquarePlus, UserRoundCog, type LucideIcon } from "lucide-react";
+import { TENANT } from "@/lib/tenant";
+import { Bell, BellOff, BellRing, Download, Ellipsis, KeyRound, LogOut, RotateCcw, Share, SquarePlus, UserRoundCog, type LucideIcon } from "lucide-react";
 import { useStore } from "@/store/useStore";
 import { MOBILE_TABS, NAV, ROLE_META, isActive } from "@/lib/nav";
 import { navigate, usePath } from "@/lib/router";
@@ -8,7 +9,7 @@ import { promptInstall, useInstallState } from "@/lib/pwa";
 import { checkLocalReminders, disableReminders, enableReminders, loadSettings, notificationsSupported, remindersFor, sendTest } from "@/lib/notifications";
 import { fmtDateShort, relativeDay } from "@/lib/date";
 import { Badge, Button, Modal, cn } from "../ui";
-import { useCurrentUser } from "./AdminShell";
+import { PasswordModal, useCurrentUser } from "./AdminShell";
 
 /** Uygulama hissi veren alt sekme çubuğu (mobil) */
 export function MobileTabBar({ role, className }: { role: Role; className?: string }) {
@@ -64,6 +65,7 @@ export function MoreSheet({ open, onClose, role }: { open: boolean; onClose: () 
   const reset = useStore((s) => s.resetDemo);
   const [notif, setNotif] = useState(false);
   const [install, setInstall] = useState(false);
+  const [pw, setPw] = useState(false);
   const installState = useInstallState();
   const rest = NAV[role].filter((n) => !MOBILE_TABS[role].includes(n.path));
   useEffect(() => onClose(), [path]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -90,23 +92,29 @@ export function MoreSheet({ open, onClose, role }: { open: boolean; onClose: () 
         <div className="divide-y divide-line overflow-hidden rounded-2xl border border-line">
           {role !== "platform" && role !== "inst" && <SheetRow icon={Bell} label="Ders hatırlatmaları" hint="1 gün önce bildirim" onClick={() => setNotif(true)} />}
           {installState !== "installed" && <SheetRow icon={Download} label="Uygulamayı yükle" hint="Ana ekrana ekle" onClick={() => setInstall(true)} />}
-          <SheetRow
-            icon={UserRoundCog}
-            label="Rol değiştir"
-            onClick={() => {
-              onClose();
-              logout();
-              navigate("/");
-            }}
-          />
-          <SheetRow
-            icon={RotateCcw}
-            label="Demo verilerini sıfırla"
-            onClick={() => {
-              onClose();
-              reset();
-            }}
-          />
+          {TENANT ? (
+            <SheetRow icon={KeyRound} label="Şifremi değiştir" onClick={() => setPw(true)} />
+          ) : (
+            <SheetRow
+              icon={UserRoundCog}
+              label="Rol değiştir"
+              onClick={() => {
+                onClose();
+                logout();
+                navigate("/");
+              }}
+            />
+          )}
+          {!TENANT && (
+            <SheetRow
+              icon={RotateCcw}
+              label="Demo verilerini sıfırla"
+              onClick={() => {
+                onClose();
+                reset();
+              }}
+            />
+          )}
           <SheetRow
             icon={LogOut}
             label="Çıkış yap"
@@ -118,8 +126,9 @@ export function MoreSheet({ open, onClose, role }: { open: boolean; onClose: () 
             }}
           />
         </div>
-        <p className="mt-4 text-center text-[11px] text-faint">Armoni · Demo sürümü</p>
+        <p className="mt-4 text-center text-[11px] text-faint">{TENANT ? `${TENANT.institution.name} · Armoni` : "Armoni · Demo sürümü"}</p>
       </Modal>
+      <PasswordModal open={pw} onClose={() => setPw(false)} />
       {notif && <NotificationSheet onClose={() => setNotif(false)} />}
       {install && <InstallSheet onClose={() => setInstall(false)} />}
     </>

@@ -9,6 +9,7 @@ import {
   GraduationCap,
   Music2,
   Sparkles,
+  Trash2,
   TrendingUp,
   UserRoundPlus,
   type LucideIcon,
@@ -16,10 +17,12 @@ import {
 import { useStore } from "@/store/useStore";
 import type { Activity, ActivityKind, Lesson, Level, Student } from "@/data/types";
 import { INSTRUMENTS, LEVELS, PIECES, SKILLS, instrumentById, levelName } from "@/data/catalog";
-import { teacherMatch, type Tone } from "@/lib/selectors";
+import { roomsOf, teacherMatch, type Tone } from "@/lib/selectors";
 import { addDays, timeAgo, todayISO, fromMinutes, toMinutes } from "@/lib/date";
 import { Avatar, Badge, Button, Field, Input, Modal, Select, Textarea, cn } from "./ui";
 import { InstrumentBadge } from "./InstrumentIcon";
+import { RepeatFields } from "./RepeatFields";
+import { defaultUntil, seriesDates, type Repeat } from "@/lib/recurrence";
 
 const LEVEL_TONES: Tone[] = ["neutral", "sky", "brand", "mint", "sun"];
 export function LevelBadge({ level }: { level: Level }) {
@@ -107,7 +110,7 @@ export function StudentFormModal({ open, onClose, student, institutionId }: { op
   const inst = data.institutions.find((i) => i.id === institutionId)!;
   const [form, setForm] = useState(() => ({
     name: student?.name ?? "",
-    age: String(student?.age ?? ""),
+    age: student?.age ? String(student.age) : "",
     instrument: student?.instrument ?? inst.courseIds[0],
     level: String(student?.level ?? 0),
     branchId: student?.branchId ?? inst.branches[0].id,
@@ -115,6 +118,14 @@ export function StudentFormModal({ open, onClose, student, institutionId }: { op
   }));
   const [errors, setErrors] = useState<Record<string, string>>({});
   const teachers = data.teachers.filter((t) => t.institutionId === institutionId);
+  const addLessonSeries = useStore((s) => s.addLessonSeries);
+  // Yeni öğrencide ders programı: ilk ders + tekrar
+  const [plan, setPlan] = useState(() => ({ on: true, date: addDays(todayISO(), 1), start: "16:00", duration: "45", room: "" }));
+  const [repeat, setRepeat] = useState<Repeat>("weekly");
+  const [until, setUntil] = useState(() => defaultUntil(addDays(todayISO(), 1)));
+  const rooms = roomsOf(inst);
+  // Aktarılan öğrencilerde yaş yerine doğum tarihi var ya da yaş bilinmiyor; düzenlerken zorunlu değil
+  const ageOptional = !!student && (!!student.birthDate || !student.age);
   const ranked = useMemo(
     () =>
       teachers
@@ -132,9 +143,14 @@ export function StudentFormModal({ open, onClose, student, institutionId }: { op
     const e: Record<string, string> = {};
     if (form.name.trim().split(" ").filter(Boolean).length < 2) e.name = "Ad ve soyad girin";
     const age = Number(form.age);
-    if (!age || age < 4 || age > 90) e.age = "4–90 arasında bir yaş girin";
+    if (!(ageOptional && !form.age) && (!age || age < 4 || age > 90)) e.age = "4–90 arasında bir yaş girin";
     const teacherId = form.teacherId || ranked[0]?.teacher.id;
     if (!teacherId) e.teacherId = "Bu branşta öğretmen yok";
+    if (!student && plan.on) {
+      const m = toMinutes(plan.start || "00:00");
+      if (!plan.date) e.plan = "İlk ders tarihini seçin";
+      else if (!plan.start || m < 8 * 60 || m > 21 * 60) e.plan = "Ders saati 08:00–21:00 arası olmalı";
+    }
     setErrors(e);
     if (Object.keys(e).length) return;
     const payload = {
@@ -146,8 +162,17 @@ export function StudentFormModal({ open, onClose, student, institutionId }: { op
       teacherId: teacherId!,
       institutionId,
     };
-    if (student) updateStudent(student.id, payload);
-    else addStudent(payload);
+    if (student) updateStudent(student.id, { ...payload, age: age || student.age });
+    else {
+      const id = addStudent(payload);
+      if (plan.on) {
+        const t = teachers.find((x) => x.id === teacherId);
+        addLessonSeries(
+          { institutionId, studentId: id, teacherId: teacherId!, instrument: form.instrument, date: plan.date, start: plan.start, duration: Number(plan.duration), room: plan.room || t?.room || rooms[0], topic: "Bireysel ders" },
+          seriesDates(plan.date, repeat, until),
+        );
+      }
+    }
     onClose();
   };
 
@@ -209,6 +234,43 @@ export function StudentFormModal({ open, onClose, student, institutionId }: { op
             ))}
           </div>
         </div>
+        {!student && (
+          <div className="sm:col-span-2">
+            <label className="mb-2 flex cursor-pointer items-center gap-2 text-[13px] font-semibold text-ink-2">
+              <input type="checkbox" checked={plan.on} onChange={(e) => setPlan((x) => ({ ...x, on: e.target.checked }))} className="size-4" />
+              Ders programını şimdi oluştur
+            </label>
+            {errors.plan && <p className="mb-2 text-xs font-medium text-rose-600">{errors.plan}</p>}
+            {plan.on && (
+              <div className="space-y-3">
+                <div className="grid gap-3 sm:grid-cols-4">
+                  <Field label="İlk ders">
+                    <Input type="date" value={plan.date} min={todayISO()} onChange={(e) => { const d = e.target.value; setPlan((x) => ({ ...x, date: d })); if (until <= d) setUntil(defaultUntil(d)); }} />
+                  </Field>
+                  <Field label="Saat">
+                    <Input type="time" step={900} value={plan.start} onChange={(e) => setPlan((x) => ({ ...x, start: e.target.value }))} />
+                  </Field>
+                  <Field label="Süre">
+                    <Select value={plan.duration} onChange={(e) => setPlan((x) => ({ ...x, duration: e.target.value }))}>
+                      {[30, 45, 60, 90].map((d) => (
+                        <option key={d} value={d}>{d} dk</option>
+                      ))}
+                    </Select>
+                  </Field>
+                  <Field label="Derslik">
+                    <Select value={plan.room} onChange={(e) => setPlan((x) => ({ ...x, room: e.target.value }))}>
+                      <option value="">Öğretmeninki</option>
+                      {rooms.map((r) => (
+                        <option key={r}>{r}</option>
+                      ))}
+                    </Select>
+                  </Field>
+                </div>
+                <RepeatFields date={plan.date} repeat={repeat} until={until} onRepeat={setRepeat} onUntil={setUntil} />
+              </div>
+            )}
+          </div>
+        )}
       </div>
     </Modal>
   );
@@ -326,7 +388,7 @@ export function AssignTeacherModal({ open, onClose, student }: { open: boolean; 
 }
 
 /* ---------- Ders ekle / düzenle ---------- */
-export function LessonFormModal({ open, onClose, lesson, institutionId, defaults }: { open: boolean; onClose: () => void; lesson?: Lesson; institutionId: string; defaults?: { date?: string; start?: string; teacherId?: string } }) {
+export function LessonFormModal({ open, onClose, lesson, institutionId, defaults }: { open: boolean; onClose: () => void; lesson?: Lesson; institutionId: string; defaults?: { date?: string; start?: string; teacherId?: string; room?: string } }) {
   const data = useStore((s) => s.data);
   const addLesson = useStore((s) => s.addLesson);
   const updateLesson = useStore((s) => s.updateLesson);
@@ -338,11 +400,20 @@ export function LessonFormModal({ open, onClose, lesson, institutionId, defaults
     date: lesson?.date ?? defaults?.date ?? todayISO(),
     start: lesson?.start ?? defaults?.start ?? "16:00",
     duration: String(lesson?.duration ?? 45),
-    room: lesson?.room ?? "Stüdyo A",
+    room: lesson?.room ?? defaults?.room ?? teachers.find((t) => t.id === (defaults?.teacherId ?? ""))?.room ?? roomsOf(data.institutions.find((i) => i.id === institutionId))[0],
     topic: lesson?.topic ?? "",
   }));
   const [errors, setErrors] = useState<Record<string, string>>({});
   const set = (k: keyof typeof form, v: string) => setForm((f) => ({ ...f, [k]: v }));
+  const addLessonSeries = useStore((s) => s.addLessonSeries);
+  const updateLessonSeries = useStore((s) => s.updateLessonSeries);
+  const deleteLessons = useStore((s) => s.deleteLessons);
+  const [repeat, setRepeat] = useState<Repeat>("once");
+  const [until, setUntil] = useState(() => defaultUntil(form.date));
+  // Düzenlenen ders bir serideyse: bu ve sonraki dersler
+  const following = lesson?.seriesId ? data.lessons.filter((x) => x.seriesId === lesson.seriesId && x.date >= lesson.date && x.status === "scheduled") : [];
+  const [applyAll, setApplyAll] = useState(false);
+  const dayDiff = (a: string, b: string) => Math.round((new Date(a + "T12:00:00").getTime() - new Date(b + "T12:00:00").getTime()) / 86400000);
 
   const submit = () => {
     const e: Record<string, string> = {};
@@ -365,8 +436,14 @@ export function LessonFormModal({ open, onClose, lesson, institutionId, defaults
       room: form.room,
       topic: form.topic.trim() || "Bireysel ders",
     };
-    if (lesson) updateLesson(lesson.id, payload);
-    else addLesson(payload);
+    if (lesson) {
+      if (applyAll && following.length > 1) updateLessonSeries(lesson.id, payload, dayDiff(form.date, lesson.date));
+      else updateLesson(lesson.id, payload);
+    } else {
+      const dates = seriesDates(form.date, repeat, until);
+      if (dates.length > 1) addLessonSeries(payload, dates);
+      else addLesson(payload);
+    }
     onClose();
   };
 
@@ -378,9 +455,25 @@ export function LessonFormModal({ open, onClose, lesson, institutionId, defaults
       subtitle="Çakışmalar takvimde otomatik işaretlenir"
       footer={
         <>
-          {lesson && lesson.status !== "cancelled" && (
+          {lesson && (
             <Button
               variant="danger"
+              icon={Trash2}
+              onClick={() => {
+                const many = following.length > 1 && confirm(`Bu ders bir serinin parçası. Bu dersle birlikte sonraki ${following.length - 1} ders de silinsin mi?
+
+Tamam: hepsini sil · İptal: yalnızca bu dersi sil`);
+                if (!many && !confirm("Bu ders kalıcı olarak silinsin mi?")) return;
+                deleteLessons(many ? following.map((x) => x.id) : [lesson.id]);
+                onClose();
+              }}
+            >
+              Sil
+            </Button>
+          )}
+          {lesson && lesson.status !== "cancelled" && (
+            <Button
+              variant="secondary"
               className="mr-auto"
               onClick={() => {
                 updateLesson(lesson.id, { status: "cancelled" });
@@ -416,7 +509,15 @@ export function LessonFormModal({ open, onClose, lesson, institutionId, defaults
           </Select>
         </Field>
         <Field label="Öğretmen" error={errors.teacherId}>
-          <Select value={form.teacherId} invalid={!!errors.teacherId} onChange={(e) => set("teacherId", e.target.value)}>
+          <Select
+            value={form.teacherId}
+            invalid={!!errors.teacherId}
+            onChange={(e) => {
+              const v = e.target.value;
+              // Öğretmenin varsayılan dersliği otomatik gelir
+              setForm((f) => ({ ...f, teacherId: v, room: teachers.find((t) => t.id === v)?.room ?? f.room }));
+            }}
+          >
             <option value="">Seçin…</option>
             {teachers.map((t) => (
               <option key={t.id} value={t.id}>
@@ -444,7 +545,7 @@ export function LessonFormModal({ open, onClose, lesson, institutionId, defaults
         </div>
         <Field label="Derslik">
           <Select value={form.room} onChange={(e) => set("room", e.target.value)}>
-            {["Stüdyo A", "Stüdyo B", "Stüdyo C", "Stüdyo D", "Stüdyo E", "Stüdyo F", "Konser salonu"].map((r) => (
+            {Array.from(new Set([...roomsOf(data.institutions.find((i) => i.id === institutionId)), form.room])).map((r) => (
               <option key={r}>{r}</option>
             ))}
           </Select>
@@ -452,6 +553,28 @@ export function LessonFormModal({ open, onClose, lesson, institutionId, defaults
         <Field label="Ders konusu">
           <Input value={form.topic} onChange={(e) => set("topic", e.target.value)} placeholder="Örn. Parça çalışması" />
         </Field>
+        {!lesson && (
+          <RepeatFields
+            className="sm:col-span-2"
+            date={form.date}
+            repeat={repeat}
+            until={until}
+            onRepeat={(r) => {
+              setRepeat(r);
+              if (until <= form.date) setUntil(defaultUntil(form.date));
+            }}
+            onUntil={setUntil}
+          />
+        )}
+        {lesson && following.length > 1 && (
+          <label className="flex cursor-pointer items-start gap-2.5 rounded-2xl border border-line bg-canvas/50 p-3 text-[13px] sm:col-span-2">
+            <input type="checkbox" checked={applyAll} onChange={(e) => setApplyAll(e.target.checked)} className="mt-0.5 size-4 accent-[var(--color-brand-600)]" />
+            <span>
+              <b>Serideki sonraki derslere de uygula</b>
+              <span className="block text-muted">Bu ders ve sonraki {following.length - 1} planlı derste saat, süre, derslik, öğretmen ve konu değişir; tarih değiştiyse hepsi aynı gün kadar kayar.</span>
+            </span>
+          </label>
+        )}
       </div>
     </Modal>
   );

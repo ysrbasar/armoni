@@ -10,6 +10,8 @@ import { INSTRUMENTS } from "@/data/catalog";
 import { Logo } from "@/components/Logo";
 import { InstrumentBadge } from "@/components/InstrumentIcon";
 import { DemoPill } from "@/components/layout/AdminShell";
+import { TENANT } from "@/lib/tenant";
+import AuthPanel from "./AuthPanel";
 
 const ROLES: { role: Role; title: string; text: string; persona: string; icon: LucideIcon; tint: string; tone: string }[] = [
   { role: "inst", title: "Kurum yöneticisi", text: "Öğrenciler, öğretmen atamaları, kurslar, takvim ve raporlar.", persona: "Hande Uslu · Armoni Müzik Akademisi", icon: Building2, tint: "#e3eefc", tone: "#2672bd" },
@@ -17,6 +19,11 @@ const ROLES: { role: Role; title: string; text: string; persona: string; icon: L
   { role: "student", title: "Öğrenci", text: "Öğrenme yolculuğu, parçalar, ödevler ve etkileşimli müzik laboratuvarı.", persona: "Ada Yıldız · Piyano", icon: Sparkles, tint: "#fdf3e1", tone: "#b97f12" },
   { role: "parent", title: "Veli", text: "Çocuğunuzun derslerini, ödevlerini ve gelişimini sade bir ekranda izleyin.", persona: "Selin Yıldız · 2 çocuk", icon: HeartHandshake, tint: "#fdeef1", tone: "#c43d62" },
 ];
+
+// Kuruma özel kurulumda henüz öğretmen, öğrenci ve veli kaydı yok; yalnızca kurum yöneticisi girer
+const VISIBLE_ROLES = TENANT
+  ? ROLES.filter((r) => r.role === "inst").map((r) => ({ ...r, persona: TENANT!.institution.name, text: "Öğretmen ve öğrenci kayıtlarıyla kurumu kurmaya buradan başlayın." }))
+  : ROLES;
 
 function HeroVisual() {
   // Porte üzerinde yükselen bir ezgi: platformun "ilerleme" fikrinin görsel karşılığı
@@ -79,7 +86,7 @@ export default function Login() {
       <div className="relative mx-auto flex min-h-dvh max-w-6xl flex-col px-5 py-6 sm:px-8">
         <header className="flex items-center justify-between">
           <Logo />
-          <DemoPill />
+          {TENANT ? <span className="truncate text-[13px] font-semibold text-ink-2">{TENANT.institution.name}</span> : <DemoPill />}
         </header>
 
         <div className="grid flex-1 items-center gap-10 py-10 lg:grid-cols-[1fr_1.1fr] lg:gap-14 lg:py-12">
@@ -98,7 +105,7 @@ export default function Login() {
               Armoni; ders programından ödev takibine, öğretmen eşleştirmesinden etkileşimli müzik laboratuvarına kadar kurumunuzun tüm eğitim akışını
               bir araya getirir.
             </p>
-            <div className="mt-6 flex flex-wrap gap-x-6 gap-y-2 text-sm">
+            <div className={`mt-6 flex flex-wrap gap-x-6 gap-y-2 text-sm ${TENANT ? "hidden" : ""}`}>
               {[
                 [data.institutions.length, "kurum"],
                 [data.teachers.length, "öğretmen"],
@@ -116,14 +123,15 @@ export default function Login() {
           </section>
 
           <section className="animate-slide-up" style={{ animationDelay: "60ms" }}>
-            <div className="mb-4 flex items-end justify-between">
+            {TENANT && <AuthPanel />}
+            <div className={`mb-4 flex items-end justify-between ${TENANT ? "hidden" : ""}`}>
               <div>
                 <h2 className="text-lg font-bold tracking-tight">Demo rolünü seçin</h2>
                 <p className="text-[13px] text-muted">Şifre gerekmez. Her rol kendi çalışma alanını açar.</p>
               </div>
             </div>
-            <div className="grid gap-3 sm:grid-cols-2">
-              {ROLES.map((r) => (
+            <div className={`grid gap-3 sm:grid-cols-2 ${TENANT ? "hidden" : ""}`}>
+              {VISIBLE_ROLES.map((r) => (
                 <button
                   key={r.role}
                   onClick={() => enter(r.role)}
@@ -163,8 +171,14 @@ export default function Login() {
         {installing && <InstallSheet onClose={() => setInstalling(false)} />}
 
         <footer className="flex flex-wrap items-center justify-between gap-2 border-t border-line/70 pt-5 text-xs text-faint">
-          <span>© 2026 Armoni · Demo sürümü. Veriler örnektir ve tarayıcınızda saklanır.</span>
-          <span>İzmir · Alsancak · Karşıyaka · Bornova · Buca · Göztepe · Bostanlı</span>
+          {TENANT ? (
+            <span>© 2026 {TENANT.institution.name} · Armoni altyapısıyla</span>
+          ) : (
+            <>
+              <span>© 2026 Armoni · Demo sürümü. Veriler örnektir ve tarayıcınızda saklanır.</span>
+              <span>İzmir · Alsancak · Karşıyaka · Bornova · Buca · Göztepe · Bostanlı</span>
+            </>
+          )}
         </footer>
       </div>
     </div>

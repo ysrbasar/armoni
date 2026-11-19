@@ -1,5 +1,6 @@
 import { useState } from "react";
-import { Building2, CalendarDays, GraduationCap, MapPin, Music2, UsersRound } from "lucide-react";
+import { Building2, CalendarDays, DoorOpen, GraduationCap, MapPin, Music2, UsersRound } from "lucide-react";
+import { RoomsSettings } from "./RoomsSettings";
 import { useStore } from "@/store/useStore";
 import { PageHeader } from "@/components/layout/AdminShell";
 import { Avatar, Badge, Button, Card, CardHeader, Field, Input, Tabs } from "@/components/ui";
@@ -9,7 +10,7 @@ import { instStudents, instTeachers } from "@/lib/selectors";
 import { navigate } from "@/lib/router";
 import { DAYS } from "@/lib/date";
 
-type Section = "branches" | "courses" | "teachers" | "students" | "schedule";
+type Section = "branches" | "rooms" | "courses" | "teachers" | "students" | "schedule";
 
 export default function Settings() {
   const data = useStore((s) => s.data);
@@ -29,12 +30,15 @@ export default function Settings() {
         className="mb-5"
         tabs={[
           { id: "branches", label: "Şubeler", icon: MapPin },
+          { id: "rooms", label: "Derslikler", icon: DoorOpen },
           { id: "courses", label: "Kurslar", icon: Music2 },
           { id: "teachers", label: "Öğretmenler", icon: UsersRound },
           { id: "students", label: "Öğrenciler", icon: GraduationCap },
           { id: "schedule", label: "Ders programı", icon: CalendarDays },
         ]}
       />
+
+      {section === "rooms" && <RoomsSettings />}
 
       {section === "branches" && (
         <div className="grid gap-4 md:grid-cols-2">
@@ -54,7 +58,7 @@ export default function Settings() {
               </div>
               <div className="mt-4 grid grid-cols-3 gap-3 border-t border-line pt-4 text-center">
                 <div>
-                  <p className="text-lg font-bold">{b.rooms}</p>
+                  <p className="text-lg font-bold">{inst.rooms?.length ?? b.rooms}</p>
                   <p className="text-[11px] text-muted">Derslik</p>
                 </div>
                 <div>

@@ -18,6 +18,7 @@ import type {
   TeacherAbsence,
 } from "./types";
 import { addDays, dayIndex, fromMinutes, toMinutes, todayISO } from "@/lib/date";
+import { TENANT } from "@/lib/tenant";
 
 /** Deterministik rastgele: her kurulumda aynı demo verisi */
 function rng(seed: number) {
@@ -220,6 +221,25 @@ const BAGLAMA_NOTES = [
 ];
 
 export function createSeed(): DemoData {
+  // Kuruma özel kurulum: tek kurum, örnek kayıt yok; katalog (parçalar, kazanımlar) hazır gelir
+  if (TENANT) {
+    return {
+      instruments: [],
+      curricula: [],
+      institutions: [TENANT.institution],
+      teachers: [],
+      students: [],
+      parents: [],
+      pieces: [],
+      studentPieces: [],
+      skills: [],
+      assignments: [],
+      lessons: [],
+      activities: [],
+      payments: [],
+      teacherAbsences: [],
+    };
+  }
   const r = rng(20261014);
   const pick = <T,>(arr: T[]) => arr[Math.floor(r() * arr.length)];
   const between = (a: number, b: number) => Math.round(a + r() * (b - a));
@@ -335,6 +355,7 @@ export function createSeed(): DemoData {
 
   // Dersler: her öğrencinin haftalık sabit dersi, geçen hafta / bu hafta / gelecek hafta
   const lessons: Lesson[] = [];
+  const STUDIOS = ["Stüdyo A", "Stüdyo B", "Stüdyo C", "Stüdyo D", "Stüdyo E", "Stüdyo F"];
   const OFFSETS = [0, 2, 0, 1, 3, -1, 4, -2, 5];
   const START_HOURS = [14, 10, 16, 12, 17, 11];
   const byTeacher = new Map<string, Student[]>();
@@ -516,13 +537,16 @@ export function createSeed(): DemoData {
   ];
 
   return {
-    institutions: INSTITUTIONS,
-    teachers,
+    instruments: [],
+    curricula: [],
+    // Demo dersleri "Stüdyo A–F" odalarında; takvim sütunları bu adlarla açılır
+    institutions: INSTITUTIONS.map((i) => ({ ...i, rooms: STUDIOS })),
+    teachers: teachers.map((t, ti) => ({ ...t, room: STUDIOS[ti % 6] })),
     students,
     parents: PARENTS,
-    pieces: PIECES,
+    pieces: [],
     studentPieces,
-    skills: SKILLS,
+    skills: [],
     assignments,
     lessons,
     activities,

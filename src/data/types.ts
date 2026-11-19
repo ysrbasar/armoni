@@ -1,17 +1,14 @@
 export type Role = "platform" | "inst" | "teacher" | "student" | "parent";
 
-export type InstrumentId =
-  | "piano"
-  | "guitar"
-  | "violin"
-  | "baglama"
-  | "drums"
-  | "voice"
-  | "flute"
-  | "theory";
+/** Hazır gelen enstrümanlar; kurum bunlara yenilerini ekleyebilir */
+export type BuiltinInstrumentId = "piano" | "guitar" | "violin" | "baglama" | "drums" | "voice" | "flute" | "theory";
+export type InstrumentId = string;
 
 /** 0: Başlangıç · 1: Temel · 2: Gelişen · 3: Orta · 4: İleri */
 export type Level = 0 | 1 | 2 | 3 | 4;
+
+/** Enstrüman ailesi: yeni enstrümanın müfredatı bu aileden türetilir */
+export type InstrumentFamily = "klavye" | "telli" | "yayli" | "uflemeli" | "vurmali" | "ses" | "kuram";
 
 export interface Instrument {
   id: InstrumentId;
@@ -21,6 +18,34 @@ export interface Instrument {
   tint: string;
   tone: string;
   goals: string[];
+  family?: InstrumentFamily;
+  /** Kurumun bu enstrümanda kullandığı program; boşsa Armoni temel programı */
+  activeCurriculumId?: string;
+  /** Kurumun eklediği enstrüman */
+  custom?: boolean;
+  hidden?: boolean;
+}
+
+/** Bir enstrüman için eğitim programı (ör. Armoni temel, ABRSM tipi, MEB GSL) */
+export interface Curriculum {
+  id: string;
+  instrument: InstrumentId;
+  name: string;
+  /** Şablonun kaynağı (çerçeve kimliği) */
+  frameworkId: string;
+  region: "Dünya" | "Türkiye" | "Kurum";
+  description: string;
+  /** Uygulamadaki 5 seviyenin bu programdaki karşılığı (ör. "Grade 1–2") */
+  levelLabels: string[];
+  createdAt: string;
+  hidden?: boolean;
+}
+
+/** Öğrencinin velisi / yakını (iletişim bilgisi) */
+export interface Guardian {
+  relation: string;
+  name: string;
+  phone: string;
 }
 
 export interface Branch {
@@ -43,6 +68,8 @@ export interface Institution {
   adminName: string;
   /** Aylık bireysel ders ücreti (TL) */
   fee: number;
+  /** Derslik adları; takvim çakışmaları derslik bazında hesaplanır */
+  rooms?: string[];
 }
 
 export interface Education {
@@ -71,6 +98,9 @@ export interface Teacher {
   experienceYears: number;
   capacity: number;
   email: string;
+  phone?: string;
+  /** Öğretmenin genelde ders verdiği derslik; yeni derslerde varsayılan */
+  room?: string;
 }
 
 export interface LevelRecord {
@@ -108,12 +138,20 @@ export interface Student {
   levelHistory: LevelRecord[];
   evaluations: Evaluation[];
   levelUpRequested?: boolean;
+  /** TC kimlik no (yalnızca kurum ve öğrencinin kendisi görür) */
+  tc?: string;
+  /** YYYY-AA-GG; yaş bundan hesaplanır */
+  birthDate?: string;
+  guardians?: Guardian[];
+  notes?: string;
 }
 
 export interface Parent {
   id: string;
   name: string;
   childIds: string[];
+  relation?: string;
+  phone?: string;
 }
 
 export interface Piece {
@@ -123,6 +161,9 @@ export interface Piece {
   instrument: InstrumentId;
   level: Level;
   tempo: number;
+  /** Ait olduğu program; boşsa Armoni temel programı */
+  curriculumId?: string;
+  hidden?: boolean;
 }
 
 export type PieceStatus = "learning" | "practice" | "review" | "done";
@@ -145,6 +186,8 @@ export interface Skill {
   stage: Level;
   title: string;
   description: string;
+  curriculumId?: string;
+  hidden?: boolean;
 }
 
 export type AssignmentStatus = "assigned" | "in_progress" | "submitted" | "done";
@@ -172,6 +215,8 @@ export type Attendance = "present" | "late" | "absent";
 
 export interface Lesson {
   id: string;
+  /** Tekrarlayan bir derse aitse serinin kimliği */
+  seriesId?: string;
   institutionId: string;
   teacherId: string;
   studentId: string;
@@ -234,6 +279,9 @@ export interface TeacherAbsence {
 }
 
 export interface DemoData {
+  /** Kurumun eklediği enstrümanlar ve hazır enstrümanlarda yaptığı değişiklikler */
+  instruments: Instrument[];
+  curricula: Curriculum[];
   institutions: Institution[];
   teachers: Teacher[];
   students: Student[];

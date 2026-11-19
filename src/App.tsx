@@ -26,6 +26,9 @@ import CalendarPage from "@/pages/inst/Calendar";
 import Reports from "@/pages/inst/Reports";
 import Settings from "@/pages/inst/Settings";
 import Payments from "@/pages/inst/Payments";
+import Accounts from "@/pages/inst/Accounts";
+import CurriculumPage from "@/pages/inst/Curriculum";
+import Tasks from "@/pages/Tasks";
 
 import TeacherHome from "@/pages/teacher/Home";
 import TeacherStudents from "@/pages/teacher/MyStudents";
@@ -76,12 +79,17 @@ function resolve(role: Role, seg: string[]): ReactNode {
       if (page === "reports") return <Reports />;
       if (page === "payments") return <Payments />;
       if (page === "settings") return <Settings />;
+      if (page === "accounts") return <Accounts />;
+      if (page === "curriculum") return <CurriculumPage />;
+      if (page === "tasks") return <Tasks />;
       break;
     case "teacher":
       if (page === "") return <TeacherHome />;
       if (page === "students") return id ? <StudentProfile id={id} back="/teacher/students" asTeacher /> : <TeacherStudents />;
       if (page === "lessons") return id ? <LessonDetail id={id} /> : <TeacherLessons />;
       if (page === "assignments") return <TeacherAssignments />;
+      if (page === "curriculum") return <CurriculumPage teacherMode />;
+      if (page === "tasks") return <Tasks />;
       if (page === "lab") return <MusicLab initial={id} />;
       break;
     case "student":
@@ -111,15 +119,25 @@ export default function App() {
   const seg = segments(path);
   const target = PREFIX[seg[0] ?? ""];
 
+  // Açılışta sunucudaki oturumu ve veriyi yükle
+  const booted = useStore((s) => s.booted);
+  useEffect(() => {
+    void useStore.getState().boot();
+  }, []);
+
   // Arayüz düzeyinde erişim sınırı: her rol yalnızca kendi alanını görür
   useEffect(() => {
-    if (!target) return;
+    if (!booted) return;
+    if (!target) {
+      if (role) navigate(ROLE_META[role].home);
+      return;
+    }
     if (!role) navigate("/");
     else if (target !== role) {
       toast(`${ROLE_META[target].label} alanına bu rolle erişilemez`, "error");
       navigate(ROLE_META[role].home);
     }
-  }, [target, role, toast]);
+  }, [target, role, toast, booted]);
 
   // Ders hatırlatmaları: veriler değiştikçe sunucuyla eşitle, yerel modda zamanı geleni göster
   const data = useStore((s) => s.data);

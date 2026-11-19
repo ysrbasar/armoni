@@ -6,8 +6,16 @@ export const skillsFor = (s: Student) => SKILLS.filter((k) => k.instrument === s
 
 /** Eğitim ilerlemesi: enstrüman kazanımlarının tamamlanma oranı */
 export const progressOf = (s: Student) => {
-  const total = skillsFor(s).length;
-  return Math.round((s.skillsDone.length / total) * 100);
+  // Yalnızca etkin programdaki kazanımlar sayılır; program yoksa ilerleme 0
+  const skills = skillsFor(s);
+  if (!skills.length) return 0;
+  return Math.round((skills.filter((k) => s.skillsDone.includes(k.id)).length / skills.length) * 100);
+};
+
+/** "Deniz Kaya" → "Deniz K."; tek kelimelik adı olduğu gibi bırakır */
+export const shortName = (name: string) => {
+  const [first, second] = name.trim().split(/s+/);
+  return second ? `${first} ${second[0]}.` : first;
 };
 
 export const skillState = (s: Student, skillId: string, stage: Level): "done" | "active" | "locked" => {
@@ -42,6 +50,10 @@ export const instTeachers = (d: DemoData, instId: string) => d.teachers.filter((
 export const teacherStudents = (d: DemoData, teacherId: string) => d.students.filter((s) => s.teacherId === teacherId);
 
 export const lessonEnd = (l: Lesson) => toMinutes(l.start) + l.duration;
+
+/** Kurumun derslikleri: tanımlı değilse varsayılan liste */
+export const DEFAULT_ROOMS = ["Derslik 1", "Derslik 2", "Derslik 3", "Derslik 4", "Derslik 5", "Derslik 6"];
+export const roomsOf = (inst?: { rooms?: string[] }) => (inst?.rooms?.length ? inst.rooms : DEFAULT_ROOMS);
 
 /** Aynı öğretmen veya aynı derslikte zaman çakışması olan dersler */
 export const conflictIds = (lessons: Lesson[]) => {
@@ -126,3 +138,16 @@ export const PAYMENT_STATE: Record<PaymentState, { label: string; tone: Tone }> 
   overdue: { label: "Gecikmiş", tone: "rose" },
 };
 export const tl = (n: number) => `₺${n.toLocaleString("tr-TR")}`;
+
+/** Doğum tarihi varsa ondan hesaplanan, yoksa kayıtlı yaş; bilinmiyorsa açıkça söyler */
+export function ageText(s: { age: number; birthDate?: string }) {
+  if (s.birthDate) {
+    const b = new Date(s.birthDate);
+    if (!Number.isNaN(b.getTime())) {
+      const n = new Date();
+      const age = n.getFullYear() - b.getFullYear() - (n < new Date(n.getFullYear(), b.getMonth(), b.getDate()) ? 1 : 0);
+      return `${age} yaş`;
+    }
+  }
+  return s.age > 0 ? `${s.age} yaş` : "yaş bilinmiyor";
+}

@@ -5,11 +5,12 @@ import { PageHeader } from "@/components/layout/AdminShell";
 import { Button, Card, IconButton, Select, Tabs, cn } from "@/components/ui";
 import { LessonFormModal } from "@/components/domain";
 import { instrumentById } from "@/data/catalog";
-import { conflictIds, lessonEnd } from "@/lib/selectors";
+import { conflictIds, lessonEnd, roomsOf } from "@/lib/selectors";
 import { DAYS_SHORT, addDays, fmtDate, fmtDateLong, fromMinutes, parseISO, toMinutes, todayISO, weekStart } from "@/lib/date";
 import type { Lesson } from "@/data/types";
 
-const HOUR = 56;
+const HOUR_WEEK = 56;
+const HOUR_DAY = 80;
 
 /** Çakışan blokları yan yana dizmek için şerit hesabı */
 function layoutLanes(list: Lesson[]) {
@@ -42,16 +43,20 @@ export default function CalendarPage() {
   const data = useStore((s) => s.data);
   const instId = useStore((s) => s.session.institutionId);
   const inst = data.institutions.find((i) => i.id === instId)!;
-  const [view, setView] = useState<"week" | "day">(() => (window.innerWidth < 640 ? "day" : "week"));
+  // Varsayılan: tek günde bütün derslikler yan yana
+  const [view, setView] = useState<"week" | "day">("day");
+  const [groupBy, setGroupBy] = useState<"room" | "teacher">("room");
+  const [room, setRoom] = useState("all");
   const [anchor, setAnchor] = useState(todayISO());
   const [course, setCourse] = useState("all");
   const [teacher, setTeacher] = useState("all");
-  const [modal, setModal] = useState<{ lesson?: Lesson; date?: string; start?: string; teacherId?: string } | null>(null);
+  const [modal, setModal] = useState<{ lesson?: Lesson; date?: string; start?: string; teacherId?: string; room?: string } | null>(null);
 
   const teachers = data.teachers.filter((t) => t.institutionId === instId);
   const all = data.lessons.filter((l) => l.institutionId === instId && l.status !== "cancelled");
   const conflicts = useMemo(() => conflictIds(all), [all]);
-  const lessons = all.filter((l) => (course === "all" || l.instrument === course) && (teacher === "all" || l.teacherId === teacher));
+  const lessons = all.filter((l) => (course === "all" || l.instrument === course) && (teacher === "all" || l.teacherId === teacher) && (room === "all" || l.room === room));
+  const HOUR = view === "day" ? HOUR_DAY : HOUR_WEEK;
 
   const ws = weekStart(anchor);
   const days = view === "week" ? Array.from({ length: 7 }, (_, i) => addDays(ws, i)) : [anchor];
@@ -61,17 +66,29 @@ export default function CalendarPage() {
   const hours = Array.from({ length: endHour - startHour }, (_, i) => startHour + i);
   const today = todayISO();
 
-  // Gün görünümünde sütunlar öğretmenlere göre
+  // Derslikler: kurumun listesi + derslerde geçen ama listede olmayanlar
+  const rooms = Array.from(new Set([...roomsOf(inst), ...all.map((l) => l.room)]));
+  // Gün görünümünde sütunlar dersliklere (varsayılan) ya da öğretmenlere göre
   const columns =
     view === "week"
-      ? days.map((d) => ({ key: d, label: `${DAYS_SHORT[(parseISO(d).getDay() + 6) % 7]} ${parseISO(d).getDate()}`, lessons: visible.filter((l) => l.date === d), date: d, teacherId: undefined as string | undefined }))
-      : (teacher === "all" ? teachers : teachers.filter((t) => t.id === teacher)).map((t) => ({
-          key: t.id,
-          label: t.name,
-          lessons: visible.filter((l) => l.teacherId === t.id),
-          date: anchor,
-          teacherId: t.id as string | undefined,
-        }));
+      ? days.map((d) => ({ key: d, label: `${DAYS_SHORT[(parseISO(d).getDay() + 6) % 7]} ${parseISO(d).getDate()}`, sub: "", lessons: visible.filter((l) => l.date === d), date: d, teacherId: undefined as string | undefined }))
+      : groupBy === "room"
+        ? (room === "all" ? rooms : [room]).map((r) => ({
+            key: r,
+            label: r,
+            sub: `${visible.filter((l) => l.room === r).length} ders`,
+            lessons: visible.filter((l) => l.room === r),
+            date: anchor,
+            teacherId: teachers.find((t) => t.room === r)?.id as string | undefined,
+          }))
+        : (teacher === "all" ? teachers : teachers.filter((t) => t.id === teacher)).map((t) => ({
+            key: t.id,
+            label: t.name,
+            sub: t.room ?? "",
+            lessons: visible.filter((l) => l.teacherId === t.id),
+            date: anchor,
+            teacherId: t.id as string | undefined,
+          }));
 
   const shift = (n: number) => setAnchor(addDays(anchor, view === "week" ? n * 7 : n));
   const conflictCount = visible.filter((l) => conflicts.has(l.id)).length;
@@ -88,7 +105,10 @@ export default function CalendarPage() {
         }
       />
       <Card className="mb-4 flex flex-wrap items-center gap-3 p-3">
-        <Tabs value={view} onChange={setView} tabs={[{ id: "week", label: "Haftalık" }, { id: "day", label: "Günlük" }]} />
+        <Tabs value={view} onChange={setView} tabs={[{ id: "day", label: "Günlük" }, { id: "week", label: "Haftalık" }]} />
+        {view === "day" && (
+          <Tabs size="sm" value={groupBy} onChange={setGroupBy} tabs={[{ id: "room", label: "Dersliğe göre" }, { id: "teacher", label: "Öğretmene göre" }]} />
+        )}
         <div className="flex items-center gap-1">
           <IconButton icon={ChevronLeft} label="Önceki" onClick={() => shift(-1)} />
           <Button size="sm" variant="secondary" onClick={() => setAnchor(today)}>
@@ -102,13 +122,19 @@ export default function CalendarPage() {
             <AlertTriangle size={13} /> {conflictCount} derste çakışma
           </span>
         )}
-        <div className="flex w-full gap-2 sm:ml-auto sm:w-auto">
+        <div className="flex w-full flex-wrap gap-2 sm:ml-auto sm:w-auto">
           <Select value={course} onChange={(e) => setCourse(e.target.value)} className="h-9 flex-1 sm:w-40" aria-label="Kurs filtresi">
             <option value="all">Tüm kurslar</option>
             {inst.courseIds.map((c) => (
               <option key={c} value={c}>
                 {instrumentById[c].name}
               </option>
+            ))}
+          </Select>
+          <Select value={room} onChange={(e) => setRoom(e.target.value)} className="h-9 flex-1 sm:w-40" aria-label="Derslik filtresi">
+            <option value="all">Tüm derslikler</option>
+            {rooms.map((r) => (
+              <option key={r}>{r}</option>
             ))}
           </Select>
           <Select value={teacher} onChange={(e) => setTeacher(e.target.value)} className="h-9 flex-1 sm:w-44" aria-label="Öğretmen filtresi">
@@ -124,12 +150,13 @@ export default function CalendarPage() {
 
       <Card className="overflow-hidden">
         <div className="scrollbar-thin overflow-x-auto">
-          <div style={{ minWidth: Math.max(720, columns.length * 130 + 60) }}>
+          <div style={{ minWidth: Math.max(720, columns.length * (view === "day" ? 170 : 130) + 60) }}>
             <div className="sticky top-0 z-10 grid border-b border-line bg-surface" style={{ gridTemplateColumns: `60px repeat(${columns.length}, minmax(0,1fr))` }}>
               <div />
               {columns.map((c) => (
                 <div key={c.key} className={cn("truncate border-l border-line px-2 py-3 text-center text-[13px] font-semibold", c.date === today && view === "week" && "text-brand-700")}>
                   {view === "week" && c.date === today ? <span className="rounded-full bg-brand-50 px-2 py-0.5">{c.label}</span> : c.label}
+                  {c.sub && <span className="block truncate text-[11px] font-medium text-muted">{c.sub}</span>}
                 </div>
               ))}
             </div>
@@ -149,7 +176,7 @@ export default function CalendarPage() {
                       <button
                         key={h}
                         aria-label={`${fromMinutes(h * 60)} için ders ekle`}
-                        onClick={() => setModal({ date: c.date, start: fromMinutes(h * 60), teacherId: c.teacherId })}
+                        onClick={() => setModal({ date: c.date, start: fromMinutes(h * 60), teacherId: c.teacherId, room: view === "day" && groupBy === "room" ? c.key : undefined })}
                         className="block w-full cursor-copy border-b border-line/60 transition hover:bg-canvas/70"
                         style={{ height: HOUR }}
                       />
@@ -179,14 +206,20 @@ export default function CalendarPage() {
                             background: ins.tint,
                             borderColor: ins.tone,
                           }}
-                          title={`${st?.name} · ${te?.name} · ${l.start} · ${l.room}${conflict ? " · Çakışma!" : ""}`}
+                          title={`${l.start}–${fromMinutes(lessonEnd(l))} · ${st?.name} · ${te?.name} · ${ins.name} · ${l.room}${conflict ? " · Çakışma: aynı derslik ya da aynı öğretmen" : ""}`}
                         >
                           <span className="flex items-center gap-1 text-[11px] font-bold tabular-nums" style={{ color: ins.tone }}>
                             {conflict && <AlertTriangle size={11} className="text-rose-600" />}
-                            {l.start}
+                            {l.start}–{fromMinutes(lessonEnd(l))}
                           </span>
                           <span className="block truncate text-[12px] leading-tight font-semibold text-ink">{st?.name}</span>
-                          {height > 40 && <span className="block truncate text-[11px] leading-tight text-ink-2">{view === "week" ? te?.name : l.room}</span>}
+                          {view === "day" ? (
+                            <>
+                              <span className="block truncate text-[11px] leading-tight text-ink-2">{groupBy === "room" ? te?.name : l.room} · {ins.short}</span>
+                            </>
+                          ) : (
+                            height > 40 && <span className="block truncate text-[11px] leading-tight text-ink-2">{te?.name} · {l.room}</span>
+                          )}
                         </button>
                       );
                     })}
@@ -204,7 +237,7 @@ export default function CalendarPage() {
           </span>
         ))}
         <span className="inline-flex items-center gap-1.5">
-          <span className="size-2.5 rounded-[3px] ring-2 ring-rose-500" /> Öğretmen veya derslik çakışması
+          <span className="size-2.5 rounded-[3px] ring-2 ring-rose-500" /> Aynı derslikte ya da aynı öğretmende çakışma
         </span>
         <span>Boş bir saate tıklayarak ders ekleyin.</span>
       </div>
