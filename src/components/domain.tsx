@@ -150,8 +150,10 @@ export function StudentFormModal({ open, onClose, student, institutionId }: { op
     const teacherId = form.teacherId || ranked[0]?.teacher.id;
     if (!teacherId) e.teacherId = "Bu branşta öğretmen yok";
     const tc = form.tc.replace(/\D/g, "");
-    if (!tc) e.tc = "TC kimlik no zorunlu (11 rakam)";
-    else if (tc.length !== 11) e.tc = `TC 11 rakam olmalı (${tc.length} rakam girildi)`;
+    // TC isteğe bağlı; girildiyse 11 rakam ve geçerli olmalı
+    if (!tc) {
+      /* boş bırakılabilir */
+    } else if (tc.length !== 11) e.tc = `TC 11 rakam olmalı (${tc.length} rakam girildi)`;
     else if (!validTc(tc)) e.tc = "Bu TC kimlik no geçersiz; rakamları kontrol edin";
     else if (tc && data.students.some((x) => x.tc === tc && x.id !== student?.id)) e.tc = "Bu TC ile kayıtlı başka bir öğrenci var";
     const phone = formatPhone(form.phone);
@@ -207,7 +209,7 @@ export function StudentFormModal({ open, onClose, student, institutionId }: { op
         <Field label="Ad soyad" error={errors.name} className="sm:col-span-2">
           <Input value={form.name} onChange={(e) => set("name", e.target.value)} placeholder="Örn. Ada Yıldız" invalid={!!errors.name} autoFocus />
         </Field>
-        <Field label="TC kimlik no *" error={errors.tc}>
+        <Field label="TC kimlik no" error={errors.tc}>
           <Input inputMode="numeric" maxLength={11} autoComplete="off" value={form.tc} onChange={(e) => set("tc", e.target.value.replace(/\D/g, ""))} placeholder="11 haneli" invalid={!!errors.tc} />
         </Field>
         <Field label="Telefon (öğrenci ya da veli)" error={errors.phone}>
