@@ -8,7 +8,7 @@ import { AssignTeacherModal, LessonItem, LevelBadge } from "@/components/domain"
 import { InstrumentBadge } from "@/components/InstrumentIcon";
 import { Donut, LEVEL_RAMP } from "@/components/charts";
 import { LEVELS, instrumentById } from "@/data/catalog";
-import { progressOf , ageText } from "@/lib/selectors";
+import { progressOf , ageText, telHref } from "@/lib/selectors";
 import { navigate } from "@/lib/router";
 import { relativeDay, todayISO } from "@/lib/date";
 import type { Student } from "@/data/types";
@@ -58,7 +58,7 @@ export default function TeacherProfile({ id }: { id: string }) {
                 </a>
               )}
               {t.phone && (
-                <a href={`tel:${t.phone.replace(/s/g, "")}`} className="mt-1 inline-flex items-center gap-1.5 text-xs font-semibold text-brand-700 hover:underline">
+                <a href={telHref(t.phone)} className="mt-1 inline-flex items-center gap-1.5 text-xs font-semibold text-brand-700 hover:underline">
                   <Phone size={13} /> {t.phone}
                 </a>
               )}

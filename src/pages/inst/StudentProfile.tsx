@@ -19,7 +19,7 @@ import { Avatar, Badge, Button, Card, CardHeader, EmptyState, Field, Modal, Prog
 import { AssignTeacherModal, AssignmentFormModal, LessonItem, LevelBadge, StudentFormModal } from "@/components/domain";
 import { InstrumentBadge } from "@/components/InstrumentIcon";
 import { LEVELS, instrumentById, levelName, pieceById } from "@/data/catalog";
-import { attendanceOf, ASSIGNMENT_STATUS, PIECE_STATUS, assignmentsOf, piecesOf, progressOf, skillState, skillsFor, stageComplete , ageText } from "@/lib/selectors";
+import { attendanceOf, ASSIGNMENT_STATUS, PIECE_STATUS, assignmentsOf, piecesOf, progressOf, skillState, skillsFor, stageComplete , ageText, telHref } from "@/lib/selectors";
 import { fmtDate, fmtDateShort, relativeDay, todayISO } from "@/lib/date";
 import { navigate } from "@/lib/router";
 import type { PieceStatus } from "@/data/types";
@@ -76,7 +76,7 @@ export default function StudentProfile({ id, back, asTeacher }: { id: string; ba
                 {!asTeacher && s.phone && (
                   <>
                     {" "}
-                    · <a href={`tel:${s.phone.replace(/\s/g, "")}`} className="text-brand-700 hover:underline">{s.phone}</a>
+                    · <a href={telHref(s.phone)} className="text-brand-700 hover:underline">{s.phone}</a>
                   </>
                 )}
               </span>

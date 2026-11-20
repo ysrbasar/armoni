@@ -51,7 +51,6 @@ export const teacherStudents = (d: DemoData, teacherId: string) => d.students.fi
 
 export const lessonEnd = (l: Lesson) => toMinutes(l.start) + l.duration;
 
-/** Kurumun derslikleri: tanımlı değilse varsayılan liste */
 /** TC kimlik no algoritma denetimi (11 hane, ilk hane 0 değil, 10. ve 11. hane kontrol basamakları) */
 export function validTc(tc: string) {
   if (!/^[1-9]\d{10}$/.test(tc)) return false;
@@ -61,15 +60,34 @@ export function validTc(tc: string) {
   return (d10 + 10) % 10 === d[9] && d11 === d[10];
 }
 
-/** Türkiye telefonunu "0532 123 45 67" biçimine getirir; geçersizse boş döner */
-export function formatPhone(raw: string) {
-  let n = raw.replace(/\D/g, "");
-  if (n.startsWith("90") && n.length === 12) n = n.slice(2);
-  if (n.length === 10) n = "0" + n;
-  if (!/^0[2-5]\d{9}$/.test(n)) return "";
-  return `${n.slice(0, 4)} ${n.slice(4, 7)} ${n.slice(7, 9)} ${n.slice(9)}`;
+/** Telefonun baştaki 0 hariç en fazla 10 rakamı ("0 (532) …", "0532…", "+90 532…" hepsi aynı sonucu verir) */
+export function phoneDigits(raw: string) {
+  const masked = raw.startsWith("0 (");
+  let n = (masked ? raw.slice(3) : raw).replace(/\D/g, "");
+  if (!masked && n.startsWith("90") && n.length >= 12) n = n.slice(2);
+  return n.replace(/^0+/, "").slice(0, 10);
 }
 
+/** Rakamları "0 (5xx) xxx xx xx" düzenine yerleştirir; parantez ve boşluklar sırası gelince eklenir */
+export function maskPhone(d: string) {
+  if (!d) return "";
+  let s = "0 (" + d.slice(0, 3);
+  if (d.length >= 3) s += ") " + d.slice(3, 6);
+  if (d.length >= 6) s += " " + d.slice(6, 8);
+  if (d.length >= 8) s += " " + d.slice(8, 10);
+  return s;
+}
+
+/** Tam ve geçerli telefonu "0 (532) 123 45 67" biçiminde döner; eksik ya da geçersizse boş */
+export function formatPhone(raw: string) {
+  const d = phoneDigits(raw);
+  return d.length === 10 && /^[2-5]/.test(d) ? maskPhone(d) : "";
+}
+
+/** tel: bağlantısı için yalnızca rakamlar */
+export const telHref = (phone: string) => `tel:${phone.replace(/[^\d+]/g, "")}`;
+
+/** Kurumun derslikleri: tanımlı değilse varsayılan liste */
 export const DEFAULT_ROOMS = ["Derslik 1", "Derslik 2", "Derslik 3", "Derslik 4", "Derslik 5", "Derslik 6"];
 export const roomsOf = (inst?: { rooms?: string[] }) => (inst?.rooms?.length ? inst.rooms : DEFAULT_ROOMS);
 

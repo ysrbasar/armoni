@@ -18,6 +18,7 @@ import { useStore } from "@/store/useStore";
 import type { Activity, ActivityKind, Lesson, Level, Student } from "@/data/types";
 import { INSTRUMENTS, LEVELS, PIECES, SKILLS, instrumentById, levelName } from "@/data/catalog";
 import { roomsOf, teacherMatch, type Tone, validTc, formatPhone } from "@/lib/selectors";
+import { PhoneInput } from "@/components/PhoneInput";
 import { addDays, timeAgo, todayISO, fromMinutes, toMinutes } from "@/lib/date";
 import { Avatar, Badge, Button, Field, Input, Modal, Select, Textarea, cn } from "./ui";
 import { InstrumentBadge } from "./InstrumentIcon";
@@ -149,10 +150,12 @@ export function StudentFormModal({ open, onClose, student, institutionId }: { op
     const teacherId = form.teacherId || ranked[0]?.teacher.id;
     if (!teacherId) e.teacherId = "Bu branşta öğretmen yok";
     const tc = form.tc.replace(/\D/g, "");
-    if (tc && !validTc(tc)) e.tc = "Geçerli bir 11 haneli TC kimlik no girin";
+    if (!tc) e.tc = "TC kimlik no zorunlu (11 rakam)";
+    else if (tc.length !== 11) e.tc = `TC 11 rakam olmalı (${tc.length} rakam girildi)`;
+    else if (!validTc(tc)) e.tc = "Bu TC kimlik no geçersiz; rakamları kontrol edin";
     else if (tc && data.students.some((x) => x.tc === tc && x.id !== student?.id)) e.tc = "Bu TC ile kayıtlı başka bir öğrenci var";
     const phone = formatPhone(form.phone);
-    if (form.phone.trim() && !phone) e.phone = "Örn. 0532 123 45 67";
+    if (form.phone.trim() && !phone) e.phone = "Telefonu eksiksiz girin: 0 (5xx) xxx xx xx";
     if (!student && plan.on) {
       const m = toMinutes(plan.start || "00:00");
       if (!plan.date) e.plan = "İlk ders tarihini seçin";
@@ -204,11 +207,11 @@ export function StudentFormModal({ open, onClose, student, institutionId }: { op
         <Field label="Ad soyad" error={errors.name} className="sm:col-span-2">
           <Input value={form.name} onChange={(e) => set("name", e.target.value)} placeholder="Örn. Ada Yıldız" invalid={!!errors.name} autoFocus />
         </Field>
-        <Field label="TC kimlik no" error={errors.tc}>
+        <Field label="TC kimlik no *" error={errors.tc}>
           <Input inputMode="numeric" maxLength={11} autoComplete="off" value={form.tc} onChange={(e) => set("tc", e.target.value.replace(/\D/g, ""))} placeholder="11 haneli" invalid={!!errors.tc} />
         </Field>
         <Field label="Telefon (öğrenci ya da veli)" error={errors.phone}>
-          <Input type="tel" inputMode="tel" autoComplete="off" value={form.phone} onChange={(e) => set("phone", e.target.value)} onBlur={() => { const p = formatPhone(form.phone); if (p) set("phone", p); }} placeholder="05xx xxx xx xx" invalid={!!errors.phone} />
+          <PhoneInput value={form.phone} onChange={(v) => set("phone", v)} invalid={!!errors.phone} />
         </Field>
         <Field label="Yaş" error={errors.age}>
           <Input type="number" inputMode="numeric" value={form.age} onChange={(e) => set("age", e.target.value)} placeholder="12" invalid={!!errors.age} />

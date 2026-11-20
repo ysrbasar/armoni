@@ -2,7 +2,8 @@ import { useEffect, useState } from "react";
 import { Save } from "lucide-react";
 import { useStore } from "@/store/useStore";
 import { Button, Field, Input, Modal, Select, Textarea, cn } from "@/components/ui";
-import { roomsOf } from "@/lib/selectors";
+import { formatPhone, roomsOf } from "@/lib/selectors";
+import { PhoneInput } from "@/components/PhoneInput";
 import { INSTRUMENTS } from "@/data/catalog";
 import type { InstrumentId, Teacher } from "@/data/types";
 
@@ -16,7 +17,8 @@ export function EditTeacherModal({ teacher, open, onClose }: { teacher: Teacher;
   }, [open, teacher]);
   const set = <K extends keyof Teacher>(k: K, v: Teacher[K]) => setF((x) => ({ ...x, [k]: v }));
   const toggle = (id: InstrumentId) => set("specialties", f.specialties.includes(id) ? f.specialties.filter((x) => x !== id) : [...f.specialties, id]);
-  const valid = f.name.trim().length >= 2;
+  const phoneOk = !f.phone || !!formatPhone(f.phone);
+  const valid = f.name.trim().length >= 2 && phoneOk;
 
   return (
     <Modal
@@ -38,7 +40,7 @@ export function EditTeacherModal({ teacher, open, onClose }: { teacher: Teacher;
                 title: f.title.trim(),
                 specialties: f.specialties,
                 email: f.email.trim(),
-                phone: f.phone?.trim() || undefined,
+                phone: f.phone ? formatPhone(f.phone) : undefined,
                 bio: f.bio.trim(),
                 experienceYears: Math.max(0, Number(f.experienceYears) || 0),
                 capacity: Math.max(1, Number(f.capacity) || 1),
@@ -76,8 +78,8 @@ export function EditTeacherModal({ teacher, open, onClose }: { teacher: Teacher;
             ))}
           </div>
         </Field>
-        <Field label="Telefon">
-          <Input type="tel" value={f.phone ?? ""} onChange={(e) => set("phone", e.target.value)} placeholder="05XX XXX XX XX" />
+        <Field label="Telefon" error={phoneOk ? undefined : "Telefonu eksiksiz girin"}>
+          <PhoneInput value={f.phone ?? ""} onChange={(v) => set("phone", v || undefined)} invalid={!phoneOk} />
         </Field>
         <Field label="E-posta">
           <Input type="email" value={f.email} onChange={(e) => set("email", e.target.value)} />
