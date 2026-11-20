@@ -176,6 +176,15 @@ export const PAYMENT_STATE: Record<PaymentState, { label: string; tone: Tone }> 
 export const tl = (n: number) => `₺${n.toLocaleString("tr-TR")}`;
 
 /** Doğum tarihi varsa ondan hesaplanan, yoksa kayıtlı yaş; bilinmiyorsa açıkça söyler */
+/** Doğum tarihinden bugünkü yaş; tarih geçersizse null */
+export function ageFromBirth(iso?: string) {
+  if (!iso) return null;
+  const b = new Date(iso + "T12:00:00");
+  if (Number.isNaN(b.getTime())) return null;
+  const n = new Date();
+  return n.getFullYear() - b.getFullYear() - (n < new Date(n.getFullYear(), b.getMonth(), b.getDate()) ? 1 : 0);
+}
+
 export function ageText(s: { age: number; birthDate?: string }) {
   if (s.birthDate) {
     const b = new Date(s.birthDate);

@@ -79,6 +79,17 @@ export default function StudentProfile({ id, back, asTeacher }: { id: string; ba
                     · <a href={telHref(s.phone)} className="text-brand-700 hover:underline">{s.phone}</a>
                   </>
                 )}
+                {!asTeacher && s.guardians?.[0]?.name && (
+                  <>
+                    {" "}
+                    · {s.guardians[0].relation || "Veli"}: {s.guardians[0].name}
+                    {s.guardians[0].phone && (
+                      <a href={telHref(s.guardians[0].phone)} className="ml-1 text-brand-700 hover:underline">
+                        {s.guardians[0].phone}
+                      </a>
+                    )}
+                  </>
+                )}
               </span>
             </span>
           </span>

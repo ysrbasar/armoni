@@ -17,7 +17,7 @@ import {
 import { useStore } from "@/store/useStore";
 import type { Activity, ActivityKind, Lesson, Level, Student } from "@/data/types";
 import { INSTRUMENTS, LEVELS, PIECES, SKILLS, instrumentById, levelName } from "@/data/catalog";
-import { roomsOf, teacherMatch, type Tone, validTc, formatPhone } from "@/lib/selectors";
+import { ageFromBirth, roomsOf, teacherMatch, type Tone, validTc, formatPhone } from "@/lib/selectors";
 import { PhoneInput } from "@/components/PhoneInput";
 import { addDays, timeAgo, todayISO, fromMinutes, toMinutes } from "@/lib/date";
 import { Avatar, Badge, Button, Field, Input, Modal, Select, Textarea, cn } from "./ui";
@@ -118,6 +118,9 @@ export function StudentFormModal({ open, onClose, student, institutionId }: { op
     teacherId: student?.teacherId ?? "",
     tc: student?.tc ?? "",
     phone: student?.phone ?? "",
+    birthDate: student?.birthDate ?? "",
+    guardianName: student?.guardians?.[0]?.name ?? "",
+    guardianPhone: student?.guardians?.[0]?.phone ?? "",
   }));
   const [errors, setErrors] = useState<Record<string, string>>({});
   const teachers = data.teachers.filter((t) => t.institutionId === institutionId);
@@ -145,8 +148,11 @@ export function StudentFormModal({ open, onClose, student, institutionId }: { op
   const submit = () => {
     const e: Record<string, string> = {};
     if (form.name.trim().split(" ").filter(Boolean).length < 2) e.name = "Ad ve soyad girin";
-    const age = Number(form.age);
-    if (!(ageOptional && !form.age) && (!age || age < 4 || age > 90)) e.age = "4–90 arasında bir yaş girin";
+    // Doğum tarihi girildiyse yaş ondan hesaplanır
+    const birthAge = ageFromBirth(form.birthDate);
+    if (form.birthDate && (birthAge === null || birthAge < 3 || birthAge > 90)) e.birthDate = "Doğum tarihini kontrol edin";
+    const age = birthAge ?? Number(form.age);
+    if (!form.birthDate && !(ageOptional && !form.age) && (!age || age < 4 || age > 90)) e.age = "4–90 arasında bir yaş girin ya da doğum tarihi seçin";
     const teacherId = form.teacherId || ranked[0]?.teacher.id;
     if (!teacherId) e.teacherId = "Bu branşta öğretmen yok";
     const tc = form.tc.replace(/\D/g, "");
@@ -157,7 +163,14 @@ export function StudentFormModal({ open, onClose, student, institutionId }: { op
     else if (!validTc(tc)) e.tc = "Bu TC kimlik no geçersiz; rakamları kontrol edin";
     else if (tc && data.students.some((x) => x.tc === tc && x.id !== student?.id)) e.tc = "Bu TC ile kayıtlı başka bir öğrenci var";
     const phone = formatPhone(form.phone);
-    if (form.phone.trim() && !phone) e.phone = "Telefonu eksiksiz girin: 0 (5xx) xxx xx xx";
+    // Kayıtlı (aktarılmış) numara değiştirilmediyse olduğu gibi kalır
+    if (form.phone.trim() && !phone && form.phone !== student?.phone) e.phone = "Telefonu eksiksiz girin: 0 (5xx) xxx xx xx";
+    const gName = form.guardianName.trim().replace(/\s+/g, " ");
+    const gPhone = formatPhone(form.guardianPhone);
+    const oldG = student?.guardians?.[0];
+    if (form.guardianPhone.trim() && !gPhone && form.guardianPhone !== oldG?.phone) e.guardianPhone = "Telefonu eksiksiz girin: 0 (5xx) xxx xx xx";
+    if (gName && gName.split(" ").length < 2) e.guardianName = "Ad ve soyad girin";
+    if (!gName && form.guardianPhone.trim()) e.guardianName = "Velinin adını ve soyadını girin";
     if (!student && plan.on) {
       const m = toMinutes(plan.start || "00:00");
       if (!plan.date) e.plan = "İlk ders tarihini seçin";
@@ -174,7 +187,13 @@ export function StudentFormModal({ open, onClose, student, institutionId }: { op
       teacherId: teacherId!,
       institutionId,
       tc: tc || undefined,
-      phone: phone || undefined,
+      phone: phone || (form.phone && form.phone === student?.phone ? student.phone : undefined),
+      birthDate: form.birthDate || undefined,
+      // İlk veli formdan; varsa diğer veliler korunur
+      guardians: [
+        ...(gName ? [{ relation: oldG?.relation || "Veli", name: gName, phone: gPhone || (form.guardianPhone === oldG?.phone ? oldG.phone : "") }] : []),
+        ...(student?.guardians?.slice(1) ?? []),
+      ],
     };
     if (student) updateStudent(student.id, { ...payload, age: age || student.age });
     else {
@@ -212,11 +231,24 @@ export function StudentFormModal({ open, onClose, student, institutionId }: { op
         <Field label="TC kimlik no" error={errors.tc}>
           <Input inputMode="numeric" maxLength={11} autoComplete="off" value={form.tc} onChange={(e) => set("tc", e.target.value.replace(/\D/g, ""))} placeholder="11 haneli" invalid={!!errors.tc} />
         </Field>
-        <Field label="Telefon (öğrenci ya da veli)" error={errors.phone}>
+        <Field label="Doğum tarihi" error={errors.birthDate}>
+          <Input type="date" max={todayISO()} value={form.birthDate} onChange={(e) => set("birthDate", e.target.value)} invalid={!!errors.birthDate} />
+        </Field>
+        <Field label="Yaş" error={errors.age} hint={form.birthDate ? "Doğum tarihinden hesaplanır" : undefined}>
+          {form.birthDate ? (
+            <Input value={ageFromBirth(form.birthDate) ?? ""} disabled readOnly />
+          ) : (
+            <Input type="number" inputMode="numeric" value={form.age} onChange={(e) => set("age", e.target.value)} placeholder="12" invalid={!!errors.age} />
+          )}
+        </Field>
+        <Field label="Öğrenci telefonu" error={errors.phone}>
           <PhoneInput value={form.phone} onChange={(v) => set("phone", v)} invalid={!!errors.phone} />
         </Field>
-        <Field label="Yaş" error={errors.age}>
-          <Input type="number" inputMode="numeric" value={form.age} onChange={(e) => set("age", e.target.value)} placeholder="12" invalid={!!errors.age} />
+        <Field label="Veli adı soyadı" error={errors.guardianName}>
+          <Input value={form.guardianName} onChange={(e) => set("guardianName", e.target.value)} placeholder="Örn. Ayşe Yıldız" invalid={!!errors.guardianName} />
+        </Field>
+        <Field label="Veli telefonu" error={errors.guardianPhone}>
+          <PhoneInput value={form.guardianPhone} onChange={(v) => set("guardianPhone", v)} invalid={!!errors.guardianPhone} />
         </Field>
         <Field label="Şube">
           <Select value={form.branchId} onChange={(e) => set("branchId", e.target.value)}>
