@@ -72,6 +72,13 @@ export default function StudentProfile({ id, back, asTeacher }: { id: string; ba
                   <InstrumentBadge id={s.instrument} size={22} rounded="rounded-md" /> {instrumentById[s.instrument].name}
                 </span>
                 · <LevelBadge level={s.level} /> · {ageText(s)} · {teacher.name}
+                {!asTeacher && s.tc && <> · TC {s.tc}</>}
+                {!asTeacher && s.phone && (
+                  <>
+                    {" "}
+                    · <a href={`tel:${s.phone.replace(/\s/g, "")}`} className="text-brand-700 hover:underline">{s.phone}</a>
+                  </>
+                )}
               </span>
             </span>
           </span>

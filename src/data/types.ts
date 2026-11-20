@@ -140,6 +140,8 @@ export interface Student {
   levelUpRequested?: boolean;
   /** TC kimlik no (yalnızca kurum ve öğrencinin kendisi görür) */
   tc?: string;
+  /** İletişim telefonu (öğrenci ya da veli); öğretmen ekranında görünmez */
+  phone?: string;
   /** YYYY-AA-GG; yaş bundan hesaplanır */
   birthDate?: string;
   guardians?: Guardian[];

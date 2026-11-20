@@ -42,7 +42,7 @@ export interface Toast {
   tone: "success" | "info" | "error";
 }
 
-export type NewStudent = Pick<Student, "name" | "age" | "instrument" | "teacherId" | "level" | "branchId" | "institutionId">;
+export type NewStudent = Pick<Student, "name" | "age" | "instrument" | "teacherId" | "level" | "branchId" | "institutionId" | "tc" | "phone">;
 export type NewLesson = Omit<Lesson, "id" | "status" | "gains" | "notes" | "attendance" | "nextGoal" | "pieceIds"> & { pieceIds?: string[] };
 export type NewAssignment = Omit<Assignment, "id" | "status" | "createdAt" | "feedback">;
 
