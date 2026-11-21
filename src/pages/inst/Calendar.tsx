@@ -11,6 +11,8 @@ import type { Lesson } from "@/data/types";
 
 const HOUR_WEEK = 56;
 const HOUR_DAY = 80;
+/** Sütun başlıklarındaki ayırt edici renk şeritleri (derslik / öğretmen) */
+const ACCENTS = ["#5b4bdb", "#14a38b", "#e0a126", "#3b8fe0", "#e2557a", "#8a5d0b", "#0b6b5b", "#8574ee", "#c43d62"];
 
 /** Çakışan blokları yan yana dizmek için şerit hesabı */
 function layoutLanes(list: Lesson[]) {
@@ -151,35 +153,82 @@ export default function CalendarPage() {
       <Card className="overflow-hidden">
         <div className="scrollbar-thin overflow-x-auto">
           <div style={{ minWidth: Math.max(720, columns.length * (view === "day" ? 170 : 130) + 60) }}>
-            <div className="sticky top-0 z-10 grid border-b border-line bg-surface" style={{ gridTemplateColumns: `60px repeat(${columns.length}, minmax(0,1fr))` }}>
-              <div />
-              {columns.map((c) => (
-                <div key={c.key} className={cn("truncate border-l border-line px-2 py-3 text-center text-[13px] font-semibold", c.date === today && view === "week" && "text-brand-700")}>
-                  {view === "week" && c.date === today ? <span className="rounded-full bg-brand-50 px-2 py-0.5">{c.label}</span> : c.label}
-                  {c.sub && <span className="block truncate text-[11px] font-medium text-muted">{c.sub}</span>}
-                </div>
-              ))}
+            <div className="sticky top-0 z-20 grid border-b-2 border-line-strong bg-canvas-2" style={{ gridTemplateColumns: `60px repeat(${columns.length}, minmax(0,1fr))` }}>
+              <div className="border-r border-line-strong bg-canvas-2" />
+              {columns.map((c, i) => {
+                const isToday = view === "week" && c.date === today;
+                const weekend = view === "week" && parseISO(c.date).getDay() % 6 === 0;
+                const accent = view === "week" ? (isToday ? "#5b4bdb" : "transparent") : ACCENTS[i % ACCENTS.length];
+                return (
+                  <div
+                    key={c.key}
+                    className={cn(
+                      "relative truncate border-l border-line-strong px-2 pt-3.5 pb-2.5 text-center",
+                      i % 2 === 1 ? "bg-canvas" : "bg-surface",
+                      weekend && "bg-sun-50",
+                      isToday && "bg-brand-50",
+                    )}
+                  >
+                    <span className="absolute inset-x-0 top-0 h-[3px]" style={{ background: accent }} />
+                    <span className={cn("inline-flex max-w-full items-center gap-1.5 truncate text-[13px] font-bold text-ink", isToday && "text-brand-700")}>
+                      {view === "day" && <span className="size-2 shrink-0 rounded-full" style={{ background: accent }} />}
+                      {c.label}
+                      {isToday && <span className="rounded-full bg-brand-600 px-1.5 py-px text-[10px] font-bold text-white">Bugün</span>}
+                    </span>
+                    {c.sub && (
+                      <span className="mt-1 block">
+                        <span className="inline-block max-w-full truncate rounded-full border border-line bg-surface px-2 py-px text-[11px] font-semibold text-muted">{c.sub}</span>
+                      </span>
+                    )}
+                  </div>
+                );
+              })}
             </div>
-            <div className="relative grid pt-2" style={{ gridTemplateColumns: `60px repeat(${columns.length}, minmax(0,1fr))` }}>
-              <div>
+            <div className="relative grid" style={{ gridTemplateColumns: `60px repeat(${columns.length}, minmax(0,1fr))` }}>
+              <div className="border-r border-line-strong bg-canvas">
                 {hours.map((h) => (
-                  <div key={h} className="pr-2 text-right text-[11px] text-faint tabular-nums" style={{ height: HOUR }}>
-                    <span className="relative -top-1.5">{String(h).padStart(2, "0")}:00</span>
+                  <div key={h} className="border-b border-line-strong pt-1 pr-2 text-right text-[11px] font-semibold text-muted tabular-nums" style={{ height: HOUR }}>
+                    {String(h).padStart(2, "0")}:00
                   </div>
                 ))}
               </div>
-              {columns.map((c) => {
+              {/* Şu anki saat çizgisi */}
+              {(view === "day" ? anchor === today : days.includes(today)) &&
+                (() => {
+                  const now = new Date();
+                  const m = now.getHours() * 60 + now.getMinutes();
+                  if (m < startHour * 60 || m > endHour * 60) return null;
+                  return (
+                    <div className="pointer-events-none absolute right-0 left-[52px] z-10 flex items-center" style={{ top: ((m - startHour * 60) / 60) * HOUR - 4 }}>
+                      <span className="size-2 rounded-full bg-rose-500" />
+                      <span className="h-[2px] flex-1 bg-rose-500/80" />
+                    </div>
+                  );
+                })()}
+              {columns.map((c, i) => {
                 const lanes = layoutLanes(c.lessons);
+                const weekend = view === "week" && parseISO(c.date).getDay() % 6 === 0;
                 return (
-                  <div key={c.key} className={cn("relative border-l border-line", c.date === today && view === "week" && "bg-brand-50/25")}>
+                  <div
+                    key={c.key}
+                    className={cn(
+                      "relative border-l border-line-strong",
+                      i % 2 === 1 ? "bg-canvas/80" : "bg-surface",
+                      weekend && "bg-sun-50/60",
+                      c.date === today && view === "week" && "bg-brand-50/60",
+                    )}
+                  >
                     {hours.map((h) => (
                       <button
                         key={h}
                         aria-label={`${fromMinutes(h * 60)} için ders ekle`}
                         onClick={() => setModal({ date: c.date, start: fromMinutes(h * 60), teacherId: c.teacherId, room: view === "day" && groupBy === "room" ? c.key : undefined })}
-                        className="block w-full cursor-copy border-b border-line/60 transition hover:bg-canvas/70"
+                        className="relative block w-full cursor-copy border-b border-line-strong transition hover:bg-brand-50/70"
                         style={{ height: HOUR }}
-                      />
+                      >
+                        {/* Yarım saat çizgisi */}
+                        <span className="pointer-events-none absolute inset-x-0 top-1/2 border-t border-dashed border-line" />
+                      </button>
                     ))}
                     {c.lessons.map((l) => {
                       const top = ((toMinutes(l.start) - startHour * 60) / 60) * HOUR;
@@ -194,8 +243,8 @@ export default function CalendarPage() {
                           key={l.id}
                           onClick={() => setModal({ lesson: l })}
                           className={cn(
-                            "absolute cursor-pointer overflow-hidden rounded-lg border-l-[3px] px-2 py-1 text-left transition hover:z-10 hover:shadow-lift",
-                            conflict && "ring-2 ring-rose-500 ring-offset-1",
+                            "absolute z-[1] cursor-pointer overflow-hidden rounded-lg border-l-4 px-2 py-1 text-left shadow-sm transition hover:z-10 hover:shadow-lift",
+                            conflict ? "ring-2 ring-rose-500 ring-offset-1" : "ring-1 ring-black/5",
                             l.status === "completed" && "opacity-60",
                           )}
                           style={{

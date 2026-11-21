@@ -1,16 +1,19 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 import {
   AlertTriangle,
   Building2,
   CalendarCheck2,
+  CalendarDays,
   Check,
   ClipboardList,
   Flame,
   GraduationCap,
   Music2,
+  Phone,
   Sparkles,
   Trash2,
   TrendingUp,
+  UserRound,
   UserRoundPlus,
   type LucideIcon,
 } from "lucide-react";
@@ -224,70 +227,82 @@ export function StudentFormModal({ open, onClose, student, institutionId }: { op
         </>
       }
     >
-      <div className="grid gap-4 sm:grid-cols-2">
-        <Field label="Ad soyad" error={errors.name} className="sm:col-span-2">
-          <Input value={form.name} onChange={(e) => set("name", e.target.value)} placeholder="Örn. Ada Yıldız" invalid={!!errors.name} autoFocus />
-        </Field>
-        <Field label="TC kimlik no" error={errors.tc}>
-          <Input inputMode="numeric" maxLength={11} autoComplete="off" value={form.tc} onChange={(e) => set("tc", e.target.value.replace(/\D/g, ""))} placeholder="11 haneli" invalid={!!errors.tc} />
-        </Field>
-        <Field label="Doğum tarihi" error={errors.birthDate}>
-          <Input type="date" max={todayISO()} value={form.birthDate} onChange={(e) => set("birthDate", e.target.value)} invalid={!!errors.birthDate} />
-        </Field>
-        <Field label="Yaş" error={errors.age} hint={form.birthDate ? "Doğum tarihinden hesaplanır" : undefined}>
-          {form.birthDate ? (
-            <Input value={ageFromBirth(form.birthDate) ?? ""} disabled readOnly />
-          ) : (
-            <Input type="number" inputMode="numeric" value={form.age} onChange={(e) => set("age", e.target.value)} placeholder="12" invalid={!!errors.age} />
-          )}
-        </Field>
-        <Field label="Öğrenci telefonu" error={errors.phone}>
-          <PhoneInput value={form.phone} onChange={(v) => set("phone", v)} invalid={!!errors.phone} />
-        </Field>
-        <Field label="Veli adı soyadı" error={errors.guardianName}>
-          <Input value={form.guardianName} onChange={(e) => set("guardianName", e.target.value)} placeholder="Örn. Ayşe Yıldız" invalid={!!errors.guardianName} />
-        </Field>
-        <Field label="Veli telefonu" error={errors.guardianPhone}>
-          <PhoneInput value={form.guardianPhone} onChange={(v) => set("guardianPhone", v)} invalid={!!errors.guardianPhone} />
-        </Field>
-        <Field label="Şube">
-          <Select value={form.branchId} onChange={(e) => set("branchId", e.target.value)}>
-            {inst.branches.map((b) => (
-              <option key={b.id} value={b.id}>
-                {b.name}
-              </option>
-            ))}
-          </Select>
-        </Field>
-        <Field label="Kurs / enstrüman">
-          <Select value={form.instrument} onChange={(e) => setForm((f) => ({ ...f, instrument: e.target.value as Student["instrument"], teacherId: "" }))}>
-            {inst.courseIds.map((c) => (
-              <option key={c} value={c}>
-                {instrumentById[c].name}
-              </option>
-            ))}
-          </Select>
-        </Field>
-        <Field label="Başlangıç seviyesi">
-          <Select value={form.level} onChange={(e) => set("level", e.target.value)}>
-            {LEVELS.map((l) => (
-              <option key={l.id} value={l.id}>
-                {l.name}
-              </option>
-            ))}
-          </Select>
-        </Field>
-        <div className="sm:col-span-2">
-          <p className="mb-1.5 text-[13px] font-semibold text-ink-2">Öğretmen</p>
-          {errors.teacherId && <p className="mb-2 text-xs font-medium text-rose-600">{errors.teacherId}</p>}
-          <div className="space-y-2">
-            {ranked.map((m, i) => (
-              <MatchRow key={m.teacher.id} m={m} recommended={i === 0} selected={(form.teacherId || ranked[0]?.teacher.id) === m.teacher.id} onSelect={() => set("teacherId", m.teacher.id)} />
-            ))}
+      <div className="space-y-4">
+        <FormSection icon={UserRound} tone="brand" title="Öğrenci bilgileri">
+          <div className="grid gap-4 sm:grid-cols-2">
+            <Field label="Ad soyad" error={errors.name} className="sm:col-span-2">
+              <Input value={form.name} onChange={(e) => set("name", e.target.value)} placeholder="Örn. Ada Yıldız" invalid={!!errors.name} autoFocus />
+            </Field>
+            <Field label="TC kimlik no" error={errors.tc}>
+              <Input inputMode="numeric" maxLength={11} autoComplete="off" value={form.tc} onChange={(e) => set("tc", e.target.value.replace(/\D/g, ""))} placeholder="11 haneli" invalid={!!errors.tc} />
+            </Field>
+            <Field label="Doğum tarihi" error={errors.birthDate}>
+              <Input type="date" max={todayISO()} value={form.birthDate} onChange={(e) => set("birthDate", e.target.value)} invalid={!!errors.birthDate} />
+            </Field>
+            <Field label="Yaş" error={errors.age} hint={form.birthDate ? "Doğum tarihinden hesaplanır" : undefined}>
+              {form.birthDate ? (
+                <Input value={ageFromBirth(form.birthDate) ?? ""} disabled readOnly />
+              ) : (
+                <Input type="number" inputMode="numeric" value={form.age} onChange={(e) => set("age", e.target.value)} placeholder="12" invalid={!!errors.age} />
+              )}
+            </Field>
           </div>
-        </div>
+        </FormSection>
+        <FormSection icon={Phone} tone="mint" title="İletişim ve veli" hint="Telefonlar öğretmen ekranında görünmez">
+          <div className="grid gap-4 sm:grid-cols-2">
+            <Field label="Öğrenci telefonu" error={errors.phone}>
+              <PhoneInput value={form.phone} onChange={(v) => set("phone", v)} invalid={!!errors.phone} />
+            </Field>
+            <Field label="Veli adı soyadı" error={errors.guardianName}>
+              <Input value={form.guardianName} onChange={(e) => set("guardianName", e.target.value)} placeholder="Örn. Ayşe Yıldız" invalid={!!errors.guardianName} />
+            </Field>
+            <Field label="Veli telefonu" error={errors.guardianPhone}>
+              <PhoneInput value={form.guardianPhone} onChange={(v) => set("guardianPhone", v)} invalid={!!errors.guardianPhone} />
+            </Field>
+          </div>
+        </FormSection>
+        <FormSection icon={Music2} tone="sun" title="Kurs ve öğretmen">
+          <div className="grid gap-4 sm:grid-cols-2">
+            <Field label="Şube">
+              <Select value={form.branchId} onChange={(e) => set("branchId", e.target.value)}>
+                {inst.branches.map((b) => (
+                  <option key={b.id} value={b.id}>
+                    {b.name}
+                  </option>
+                ))}
+              </Select>
+            </Field>
+            <Field label="Kurs / enstrüman">
+              <Select value={form.instrument} onChange={(e) => setForm((f) => ({ ...f, instrument: e.target.value as Student["instrument"], teacherId: "" }))}>
+                {inst.courseIds.map((c) => (
+                  <option key={c} value={c}>
+                    {instrumentById[c].name}
+                  </option>
+                ))}
+              </Select>
+            </Field>
+            <Field label="Başlangıç seviyesi">
+              <Select value={form.level} onChange={(e) => set("level", e.target.value)}>
+                {LEVELS.map((l) => (
+                  <option key={l.id} value={l.id}>
+                    {l.name}
+                  </option>
+                ))}
+              </Select>
+            </Field>
+            <div className="sm:col-span-2">
+              <p className="mb-1.5 text-[13px] font-semibold text-ink-2">Öğretmen</p>
+              {errors.teacherId && <p className="mb-2 text-xs font-medium text-rose-600">{errors.teacherId}</p>}
+              <div className="space-y-2">
+                {ranked.map((m, i) => (
+                  <MatchRow key={m.teacher.id} m={m} recommended={i === 0} selected={(form.teacherId || ranked[0]?.teacher.id) === m.teacher.id} onSelect={() => set("teacherId", m.teacher.id)} />
+                ))}
+              </div>
+            </div>
+          </div>
+        </FormSection>
         {!student && (
-          <div className="sm:col-span-2">
+          <FormSection icon={CalendarDays} tone="sky" title="Ders programı">
             <label className="mb-2 flex cursor-pointer items-center gap-2 text-[13px] font-semibold text-ink-2">
               <input type="checkbox" checked={plan.on} onChange={(e) => setPlan((x) => ({ ...x, on: e.target.checked }))} className="size-4" />
               Ders programını şimdi oluştur
@@ -321,10 +336,34 @@ export function StudentFormModal({ open, onClose, student, institutionId }: { op
                 <RepeatFields date={plan.date} repeat={repeat} until={until} onRepeat={setRepeat} onUntil={setUntil} />
               </div>
             )}
-          </div>
+          </FormSection>
         )}
       </div>
     </Modal>
+  );
+}
+
+const SECTION_TONES = {
+  brand: { box: "border-brand-100 bg-brand-50/50", dot: "bg-brand-500", text: "text-brand-800" },
+  mint: { box: "border-mint-100 bg-mint-50/60", dot: "bg-mint-500", text: "text-mint-700" },
+  sun: { box: "border-sun-100 bg-sun-50/70", dot: "bg-sun-500", text: "text-sun-700" },
+  sky: { box: "border-sky-500/20 bg-sky-50/70", dot: "bg-sky-500", text: "text-sky-600" },
+} as const;
+
+/** Formu renkli, başlıklı bölümlere ayırır; alanlar düz bir sayfada kaybolmaz */
+export function FormSection({ icon: Icon, title, hint, tone, children }: { icon: LucideIcon; title: string; hint?: string; tone: keyof typeof SECTION_TONES; children: ReactNode }) {
+  const t = SECTION_TONES[tone];
+  return (
+    <section className={cn("rounded-2xl border p-4", t.box)}>
+      <header className="mb-3 flex flex-wrap items-center gap-x-2 gap-y-1">
+        <span className={cn("grid size-7 place-items-center rounded-lg text-white shadow-sm", t.dot)}>
+          <Icon size={15} />
+        </span>
+        <h3 className={cn("text-[14px] font-bold", t.text)}>{title}</h3>
+        {hint && <span className="text-[12px] text-muted">· {hint}</span>}
+      </header>
+      {children}
+    </section>
   );
 }
 
